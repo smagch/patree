@@ -12,18 +12,27 @@ type Matcher interface {
 	Match(s string) int
 }
 
-type IntMatcher struct {}
+type MatcherFunc func(s string) int
 
-func (m *IntMatcher) Match(str string) int {
-	length := len(str)
-	if length == 0 || !isDigit(str[0]) {
+func (f MatcherFunc) Match(s string) int {
+	return f(s)
+}
+
+type ByteMatcherFunc func(c byte) bool
+
+func (f ByteMatcherFunc) Match(s string) int {
+	length := len(s)
+	if length == 0 || !f(s[0]) {
 		return -1
 	}
 	for i := 1; i < length; i++ {
-		if isDigit(str[i]) {
+		if f(s[i]) {
 			continue
 		}
 		return i
 	}
 	return length
 }
+
+var IntMatcher = ByteMatcherFunc(isDigit)
+var HexMatcher = ByteMatcherFunc(isHex)
