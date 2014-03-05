@@ -53,46 +53,44 @@ func (e *StaticEntry) add(child Entry) {
 	e.entries = append(e.entries, child)
 }
 
-// type MatchEntry struct {
-// 	name     string
-// 	handlers map[string]*http.Handler
-// 	matcher  Mather
-// 	entries  []Entry
-// }
+type MatchEntry struct {
+	name     string
+	handlers map[string]http.Handler
+	matcher  Matcher
+	entries  []Entry
+}
 
-// func (e *MatchEntry) Exec(str string) (*http.Handler, []string) {
-// 	i, ok := e.matcher.Match(str)
-// 	if !ok {
-// 		return nil, nil
-// 	}
+func newMatchEntry(n string, m Matcher) *MatchEntry {
+	return &MatchEntry{
+		name:     n,
+		handlers: make(map[string]http.Handler),
+		matcher:  m,
+		entries:  make([]Entry, 0),
+	}
+}
 
-// 	// finished!
-// 	if len(str) == i {
-// 		return nil, true
-// 	}
+func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
+	i := e.matcher.Match(str)
+	if i == -1 {
+		return nil, nil
+	}
 
-// 	// c.str = suffix
-// 	suffix := str[i:]
+	// finish parsing
+	if len(str) == i {
+		h, _ := e.handlers[method]
+		return h, []string{e.name, str}
+	}
 
-// 	// if suffix has still long way to go
-// 	// children entry would
+	for _, entry := range e.entries {
+		if h, params := entry.Exec(method, str[i:]); h != nil {
+			if params == nil {
+				params = []string{e.name, str[:i]}
+			} else {
+				params = append(params, e.name, str[:i])
+			}
+			return h, params
+		}
+	}
 
-// 	// and then entry that capture
-// 	for _, entry := range m.entries {
-// 		if val, ok := entry.Exec(suffix); ok {
-// 			// TODO order??
-// 			// var ret = []string{}
-// 			// ret = append(ret, str[])
-// 			if val != nil {
-// 				ret = append(ret, val...)
-// 			}
-// 			return ret, true
-// 		}
-// 	}
-
-// 	return nil, false
-// }
-
-// func (e *StaticEntry) AddEntry(child *MatchEntry) {
-// 	// entries = append(entries)
-// }
+	return nil, nil
+}
