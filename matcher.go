@@ -1,11 +1,11 @@
 package treemux
 
-func isDigit(c byte) bool {
-	return '0' <= c && c <= '9'
+func isDigit(r rune) bool {
+	return '0' <= r && r <= '9'
 }
 
-func isHex(c byte) bool {
-	return isDigit(c) || ('a' <= c && 'f' >= c)
+func isHex(r rune) bool {
+	return isDigit(r) || ('a' <= r && 'f' >= r)
 }
 
 type Matcher interface {
@@ -18,21 +18,26 @@ func (f MatcherFunc) Match(s string) int {
 	return f(s)
 }
 
-type ByteMatcherFunc func(c byte) bool
+type RuneMatcherFunc func(r rune) bool
 
-func (f ByteMatcherFunc) Match(s string) int {
+func (f RuneMatcherFunc) Match(s string) int {
 	length := len(s)
-	if length == 0 || !f(s[0]) {
+	if length == 0 {
 		return -1
 	}
-	for i := 1; i < length; i++ {
-		if f(s[i]) {
+
+	for i, r := range s {
+		if f(r) {
 			continue
 		}
-		return i
+		if i != 0 {
+			return i
+		}
+		return -1
 	}
+
 	return length
 }
 
-var IntMatcher = ByteMatcherFunc(isDigit)
-var HexMatcher = ByteMatcherFunc(isHex)
+var IntMatcher = RuneMatcherFunc(isDigit)
+var HexMatcher = RuneMatcherFunc(isHex)
