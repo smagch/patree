@@ -8,6 +8,10 @@ func isHex(r rune) bool {
 	return isDigit(r) || ('a' <= r && 'f' >= r)
 }
 
+func isNotSlash(r rune) bool {
+	return r != '/'
+}
+
 type Matcher interface {
 	Match(s string) int
 }
@@ -41,3 +45,4 @@ func (f RuneMatcherFunc) Match(s string) int {
 
 var IntMatcher = RuneMatcherFunc(isDigit)
 var HexMatcher = RuneMatcherFunc(isHex)
+var DefaultMatcher = RuneMatcherFunc(isNotSlash)

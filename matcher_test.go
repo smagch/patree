@@ -41,3 +41,21 @@ func TestHexMatcher(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultMatcher(t *testing.T) {
+	m := DefaultMatcher
+	cases := map[string]int {
+		"foobar2000": len("foobar2000"),
+		"foobar/2000": len("foobar"),
+		"/foobar": -1,
+		"日本語": len("日本語"),
+		"languages/にほん": len("languages"),
+		"日本/語": len("日本"),
+	}
+	for k, v := range cases {
+		i := m.Match(k)
+		if i != v {
+			t.Fatalf("Got %d. Expected index is %d with argument %s", i, v, k)
+		}
+	}
+}
