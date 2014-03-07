@@ -56,12 +56,17 @@ func (m *SuffixMatcher) Match(s string) int {
 	}
 
 	for i, r := range s {
-		if i >= d || !m.f(r) {
+		if i > d {
 			return -1
 		}
+
 		// peek string to match to suffix pattern
-		if m.suffix == s[(1+i):(1+i+len(m.suffix))] {
-			return 1 + i + len(m.suffix)
+		if i != 0 && m.suffix == s[i:i+len(m.suffix)] {
+			return i + len(m.suffix)
+		}
+
+		if !m.f(r) {
+			return -1
 		}
 	}
 
