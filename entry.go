@@ -94,3 +94,45 @@ func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
 
 	return nil, nil
 }
+
+type SuffixMatchEntry struct {
+	name     string
+	handlers map[string]http.Handler
+	matcher  *SuffixMatcher
+	entries  []Entry
+}
+
+func newSuffixMatchEntry(s string, m *SuffixMatcher) *SuffixMatchEntry {
+	return &SuffixMatchEntry{
+		name:     s,
+		handlers: make(map[string]http.Handler),
+		matcher:  m,
+		entries:  make([]Entry, 0),
+	}
+}
+
+func (e *SuffixMatchEntry) Exec(method, s string) (http.Handler, []string) {
+	i := e.matcher.Match(s)
+	if i == -1 {
+		return nil, nil
+	}
+
+	// finish parsing
+	if len(s) == i {
+		h, _ := e.handlers[method]
+		return h, []string{e.name, s[:(i - len(e.matcher.suffix))]}
+	}
+
+	for _, entry := range e.entries {
+		if h, params := entry.Exec(method, s[i:]); h != nil {
+			if params == nil {
+				params = []string{e.name, s[:(i - len(e.matcher.suffix))]}
+			} else {
+				params = append(params, e.name, s[:(i-len(e.matcher.suffix))])
+			}
+			return h, params
+		}
+	}
+
+	return nil, nil
+}

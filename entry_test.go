@@ -85,3 +85,28 @@ func TestIntMatchEntry(t *testing.T) {
 		}
 	}
 }
+
+func TestSuffixMatchEntry(t *testing.T) {
+	SuffixMatcher := &SuffixMatcher{"-page", DefaultMatcher}
+	e := newSuffixMatchEntry("pager", SuffixMatcher)
+	e.handlers["GET"] = foobarHandler
+
+	cases := map[string][]string{
+		"234565-page": []string{"pager", "234565"},
+		"100-page":    []string{"pager", "100"},
+		"1-page":      []string{"pager", "1"},
+		"世界-page":     []string{"pager", "世界"},
+		"-page":       nil,
+		"":            nil,
+	}
+
+	for s, params := range cases {
+		_, p := e.Exec("GET", s)
+		if !reflect.DeepEqual(params, p) {
+			t.Fatalf("param should be %v. But got %v\n", params, p)
+		}
+		if h, _ := e.Exec("POST", s); h != nil {
+			t.Fatal("It shouldn't catch POST method")
+		}
+	}
+}
