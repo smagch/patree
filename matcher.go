@@ -43,6 +43,31 @@ func (f RuneMatcherFunc) Match(s string) int {
 	return length
 }
 
+type SuffixMatcher struct {
+	suffix string
+	f      RuneMatcherFunc
+}
+
+func (m *SuffixMatcher) Match(s string) int {
+	d := len(s) - len(m.suffix)
+	// at least 1 character is required to match suffix and matcher
+	if d < 1 {
+		return -1
+	}
+
+	for i, r := range s {
+		if i >= d || !m.f(r) {
+			return -1
+		}
+		// peek string to match to suffix pattern
+		if m.suffix == s[(1+i):(1+i+len(m.suffix))] {
+			return 1 + i + len(m.suffix)
+		}
+	}
+
+	return -1
+}
+
 var IntMatcher = RuneMatcherFunc(isDigit)
 var HexMatcher = RuneMatcherFunc(isHex)
 var DefaultMatcher = RuneMatcherFunc(isNotSlash)

@@ -59,3 +59,22 @@ func TestDefaultMatcher(t *testing.T) {
 		}
 	}
 }
+
+func TestSuffixMatcherWithIntMatcher(t *testing.T) {
+	m := SuffixMatcher{"-page", IntMatcher}
+	cases := map[string]int{
+		"2000-page":      len("2000-page"),
+		"2000-page/edit": len("2000-page"),
+		"1-page":         len("1-page"),
+		"f-page":         -1,
+		"-page":          -1,
+		"page":           -1,
+		"-p":             -1,
+	}
+	for k, v := range cases {
+		i := m.Match(k)
+		if i != v {
+			t.Fatalf("Got %d. Expected index is %d with argument %s", i, v, k)
+		}
+	}
+}
