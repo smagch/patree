@@ -22,3 +22,25 @@ func TestSplitPath(t *testing.T) {
 		}
 	}
 }
+
+func TestNewEntry(t *testing.T) {
+	cases := map[string]Entry{
+		"/foo/":          newStatic("/foo/"),
+		"foo/":           newStatic("foo/"),
+		"<int:foo>":      newMatchEntry("foo", IntMatcher),
+		"<int:>":         newMatchEntry("", IntMatcher),
+		"<foo>":          newMatchEntry("foo", DefaultMatcher),
+		"<:foo>":         newMatchEntry("foo", DefaultMatcher),
+		"<hex:bar>":      newMatchEntry("bar", HexMatcher),
+		"<default:hoge>": newMatchEntry("hoge", DefaultMatcher),
+	}
+	for s, e := range cases {
+		entry, err := NewEntry(s)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		if !e.Equals(entry) {
+			t.Fatalf("Got %v instead of Expected %v", e, entry)
+		}
+	}
+}

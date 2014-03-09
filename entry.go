@@ -2,11 +2,13 @@ package treemux
 
 import (
 	"net/http"
+	"reflect"
 	"strings"
 )
 
 type Entry interface {
 	Exec(method, s string) (http.Handler, []string)
+	Equals(e Entry) bool
 }
 
 type StaticEntry struct {
@@ -21,6 +23,14 @@ func newStatic(p string) *StaticEntry {
 		handlers: make(map[string]http.Handler),
 		entries:  make([]Entry, 0),
 	}
+}
+
+func (e *StaticEntry) Equals(entry Entry) bool {
+	switch entry.(type) {
+	case *StaticEntry:
+		return e.pattern == entry.(*StaticEntry).pattern
+	}
+	return false
 }
 
 func (e *StaticEntry) Exec(method, str string) (http.Handler, []string) {
@@ -67,6 +77,18 @@ func newMatchEntry(n string, m Matcher) *MatchEntry {
 		matcher:  m,
 		entries:  make([]Entry, 0),
 	}
+}
+
+func (e *MatchEntry) Equals(entry Entry) bool {
+	switch entry.(type) {
+	case *MatchEntry:
+		matchEntry := entry.(*MatchEntry)
+		if e.name != matchEntry.name {
+			return false
+		}
+		return reflect.ValueOf(e.matcher).Pointer() == reflect.ValueOf(matchEntry.matcher).Pointer()
+	}
+	return false
 }
 
 func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
