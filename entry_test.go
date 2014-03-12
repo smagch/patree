@@ -12,7 +12,7 @@ var foobarHandler = http.HandlerFunc(foobar)
 var fooValue = reflect.ValueOf(foobarHandler)
 
 func TestStaticEntry(t *testing.T) {
-	e := newStatic("/foobar")
+	e := newStaticEntry("/foobar")
 	e.handlers["GET"] = foobarHandler
 
 	h, _ := e.Exec("GET", "/foobar")
@@ -30,7 +30,7 @@ func TestStaticEntry(t *testing.T) {
 		t.Fatal("cought wrong path")
 	}
 
-	child := newStatic("/2000")
+	child := newStaticEntry("/2000")
 	child.handlers["GET"] = foobarHandler
 	e.add(child)
 	h, _ = e.Exec("GET", "/foobar/2000")
@@ -38,7 +38,7 @@ func TestStaticEntry(t *testing.T) {
 		t.Fatal("nested entry match failed")
 	}
 
-	parent := newStatic("/api")
+	parent := newStaticEntry("/api")
 	parent.add(e)
 	h, _ = parent.Exec("GET", "/api/foobar/2000")
 	if h == nil {
@@ -63,7 +63,7 @@ func TestIntMatchEntry(t *testing.T) {
 		"139093449850284011": true,
 	}
 
-	e := newMatchEntry("test_id", IntMatcher)
+	e, _ := newMatchEntry("<int:test_id>")
 	e.handlers["GET"] = foobarHandler
 
 	for s, ok := range cases {
@@ -86,27 +86,49 @@ func TestIntMatchEntry(t *testing.T) {
 	}
 }
 
-func TestSuffixMatchEntry(t *testing.T) {
-	SuffixMatcher := &SuffixMatcher{"-page", DefaultMatcher}
-	e := newSuffixMatchEntry("pager", SuffixMatcher)
-	e.handlers["GET"] = foobarHandler
+// func TestNewEntry(t *testing.T) {
+// 	cases := make(map[string]Entry)
+// 	cases["/foo/":          newStatic("/foo/"),
+// 		"foo/":           newStatic("foo/"),
+// 		"<int:foo>":      newMatchEntry("foo", IntMatcher),
+// 		"<int:>":         newMatchEntry("", IntMatcher),
+// 		"<foo>":          newMatchEntry("foo", DefaultMatcher),
+// 		"<:foo>":         newMatchEntry("foo", DefaultMatcher),
+// 		"<hex:bar>":      newMatchEntry("bar", HexMatcher),
+// 		"<default:hoge>": newMatchEntry("hoge", DefaultMatcher),
+// 	}
+// 	for s, e := range cases {
+// 		entry, err := NewEntry(s)
+// 		if err != nil {
+// 			t.Fatal(err.Error())
+// 		}
+// 		if !e.Equals(entry) {
+// 			t.Fatalf("Got %v instead of Expected %v", e, entry)
+// 		}
+// 	}
+// }
 
-	cases := map[string][]string{
-		"234565-page": []string{"pager", "234565"},
-		"100-page":    []string{"pager", "100"},
-		"1-page":      []string{"pager", "1"},
-		"世界-page":     []string{"pager", "世界"},
-		"-page":       nil,
-		"":            nil,
-	}
+// func TestSuffixMatchEntry(t *testing.T) {
+// 	SuffixMatcher := &SuffixMatcher{"-page", DefaultMatcher}
+// 	e := newSuffixMatchEntry("pager", SuffixMatcher)
+// 	e.handlers["GET"] = foobarHandler
 
-	for s, params := range cases {
-		_, p := e.Exec("GET", s)
-		if !reflect.DeepEqual(params, p) {
-			t.Fatalf("param should be %v. But got %v\n", params, p)
-		}
-		if h, _ := e.Exec("POST", s); h != nil {
-			t.Fatal("It shouldn't catch POST method")
-		}
-	}
-}
+// 	cases := map[string][]string{
+// 		"234565-page": []string{"pager", "234565"},
+// 		"100-page":    []string{"pager", "100"},
+// 		"1-page":      []string{"pager", "1"},
+// 		"世界-page":     []string{"pager", "世界"},
+// 		"-page":       nil,
+// 		"":            nil,
+// 	}
+
+// 	for s, params := range cases {
+// 		_, p := e.Exec("GET", s)
+// 		if !reflect.DeepEqual(params, p) {
+// 			t.Fatalf("param should be %v. But got %v\n", params, p)
+// 		}
+// 		if h, _ := e.Exec("POST", s); h != nil {
+// 			t.Fatal("It shouldn't catch POST method")
+// 		}
+// 	}
+// }
