@@ -1,4 +1,4 @@
-package treemux
+package patree
 
 import (
 	"testing"
