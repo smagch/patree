@@ -22,7 +22,7 @@ func NewEntry(s string) (Entry, error) {
 }
 
 //
-// Entry
+// Entry 
 //
 type Entry interface {
 	Exec(method, s string) (http.Handler, []string)
@@ -31,35 +31,40 @@ type Entry interface {
 	SetHandler(method string, h http.Handler) error
 }
 
-type StaticEntry struct {
+type BaseEntry struct {
 	pattern  string
 	handlers map[string]http.Handler
 	entries  []Entry
 }
 
+func (e *BaseEntry) SetHandler(method string, h http.Handler) error {
+	if e.HasHandler(method) {
+		return errors.New("Duplicate Handler registration")
+	}
+	e.handlers[method] = h
+	return nil
+}
+
+func (e *BaseEntry) HasHandler(method string) bool {
+	_, ok := e.handlers[method]
+	return ok
+}
+
+func (e *BaseEntry) Pattern() string {
+	return e.pattern
+}
+
 func newStaticEntry(pattern string) *StaticEntry {
-	return &StaticEntry{
+	base:= BaseEntry{
 		pattern,
 		make(map[string]http.Handler),
 		make([]Entry, 0),
 	}
+	return &StaticEntry{base}
 }
 
-func (p *StaticEntry) SetHandler(method string, h http.Handler) error {
-	if p.HasHandler(method) {
-		return errors.New("Duplicate Handler registration")
-	}
-	p.handlers[method] = h
-	return nil
-}
-
-func (p *StaticEntry) HasHandler(method string) bool {
-	_, ok := p.handlers[method]
-	return ok
-}
-
-func (p *StaticEntry) Pattern() string {
-	return p.pattern
+type StaticEntry struct {
+	BaseEntry
 }
 
 func (e *StaticEntry) Exec(method, str string) (http.Handler, []string) {
@@ -96,7 +101,7 @@ func (e *StaticEntry) add(child Entry) {
 // Match
 //
 type MatchEntry struct {
-	StaticEntry
+	BaseEntry
 	name    string
 	matcher Matcher
 }
@@ -129,7 +134,7 @@ func newMatchEntry(pat string) (*MatchEntry, error) {
 	}
 
 	e := MatchEntry{
-		StaticEntry{pat, make(map[string]http.Handler), make([]Entry, 0)},
+		BaseEntry{pat, make(map[string]http.Handler), make([]Entry, 0)},
 		name,
 		matcher,
 	}
@@ -167,7 +172,7 @@ func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
 // Suffix
 //
 // type SuffixMatchEntry struct {
-// 	StaticEntry
+// 	BaseEntry
 // 	name     string
 // 	matcher  *SuffixMatcher
 // }
@@ -175,7 +180,7 @@ func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
 // func newSuffixMatchEntry(pat string) *SuffixMatchEntry {
 
 // 	return &SuffixMatchEntry{
-// 		StaticEntry{pat, make(map[string]http.Handler), make([]Entry, 0)},
+// 		BaseEntry{pat, make(map[string]http.Handler), make([]Entry, 0)},
 // 		pat,
 // 		matcher: m,
 // 	}
