@@ -160,13 +160,7 @@ func newMatchEntry(pat string) *MatchEntry {
 		panic(errors.New("no such match type: " + matchType))
 	}
 
-	e := MatchEntry{
-		StaticEntry{pat, make(map[string]http.Handler), make([]Entry, 0)},
-		name,
-		matcher,
-	}
-
-	return &e
+	return &MatchEntry{*newStaticEntry(pat), name, matcher}
 }
 
 func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
