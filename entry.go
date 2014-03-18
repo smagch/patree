@@ -25,17 +25,24 @@ func NewEntry(s string) Entry {
 type Entry interface {
 	Exec(method, s string) (http.Handler, []string)
 	Pattern() string
+	AddEntry(child Entry)
+	Len() int
+	MergePatterns([]string)
 	HasHandler(method string) bool
 	SetHandler(method string, h http.Handler) error
 }
 
-type BaseEntry struct {
+type StaticEntry struct {
 	pattern  string
 	handlers map[string]http.Handler
 	entries  []Entry
 }
 
-func (e *BaseEntry) SetHandler(method string, h http.Handler) error {
+func (e *StaticEntry) Len() int {
+	return len(e.entries)
+}
+
+func (e *StaticEntry) SetHandler(method string, h http.Handler) error {
 	if e.HasHandler(method) {
 		return errors.New("Duplicate Handler registration")
 	}
@@ -43,26 +50,56 @@ func (e *BaseEntry) SetHandler(method string, h http.Handler) error {
 	return nil
 }
 
-func (e *BaseEntry) HasHandler(method string) bool {
+func (e *StaticEntry) HasHandler(method string) bool {
 	_, ok := e.handlers[method]
 	return ok
 }
 
-func (e *BaseEntry) Pattern() string {
+func (e *StaticEntry) Pattern() string {
 	return e.pattern
 }
 
+func (e *StaticEntry) getChildEntry(pat string) Entry {
+	for _, entry := range e.entries {
+		if pat == entry.Pattern() {
+			return entry
+		}
+	}
+	return nil
+}
+
+func (e *StaticEntry) MergePatterns(patterns []string) {
+	pat := patterns[0]
+	if child := e.getChildEntry(pat); child != nil {
+		if len(patterns) == 1 {
+			panic(errors.New("duplicate pattern: " + pat))
+		}
+		child.MergePatterns(patterns[1:])
+		return
+	}
+	e.addPatterns(patterns)
+}
+
+// TODO sort
+func (e *StaticEntry) AddEntry(child Entry) {
+	e.entries = append(e.entries, child)
+}
+
+func (e *StaticEntry) addPatterns(patterns []string) {
+	var currentNode Entry = Entry(e)
+	for _, pat := range patterns {
+		entry := NewEntry(pat)
+		currentNode.AddEntry(entry)
+		currentNode = entry
+	}
+}
+
 func newStaticEntry(pattern string) *StaticEntry {
-	base := BaseEntry{
+	return &StaticEntry{
 		pattern,
 		make(map[string]http.Handler),
 		make([]Entry, 0),
 	}
-	return &StaticEntry{base}
-}
-
-type StaticEntry struct {
-	BaseEntry
 }
 
 func (e *StaticEntry) Exec(method, str string) (http.Handler, []string) {
@@ -99,7 +136,7 @@ func (e *StaticEntry) add(child Entry) {
 // Match
 //
 type MatchEntry struct {
-	BaseEntry
+	StaticEntry
 	name    string
 	matcher Matcher
 }
@@ -124,7 +161,7 @@ func newMatchEntry(pat string) *MatchEntry {
 	}
 
 	e := MatchEntry{
-		BaseEntry{pat, make(map[string]http.Handler), make([]Entry, 0)},
+		StaticEntry{pat, make(map[string]http.Handler), make([]Entry, 0)},
 		name,
 		matcher,
 	}
@@ -162,7 +199,7 @@ func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
 // Suffix
 //
 // type SuffixMatchEntry struct {
-// 	BaseEntry
+// 	StaticEntry
 // 	name     string
 // 	matcher  *SuffixMatcher
 // }

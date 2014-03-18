@@ -86,6 +86,40 @@ func TestIntMatchEntry(t *testing.T) {
 	}
 }
 
+func TestMergePattern(t *testing.T) {
+	mustHave := func(entry Entry, pat string) Entry {
+		var child Entry
+		switch v := entry.(type) {
+		case *StaticEntry:
+			child = entry.(*StaticEntry).getChildEntry(pat)
+		case *MatchEntry:
+			child = entry.(*MatchEntry).getChildEntry(pat)
+		default:
+			t.Fatal("unknown entry type: ", v)
+		}
+
+		if child == nil {
+			t.Fatalf("%s must have a pattern %s\n", entry.Pattern(), pat)
+		}
+
+		return child
+	}
+
+	//   1. /foo/<int:bar>/about
+	e := NewEntry("/foo/")
+	e.MergePatterns([]string{"<int:bar>", "/about"})
+	bar := mustHave(e, "<int:bar>")
+	mustHave(bar, "/about")
+
+	//   2. /foo/<int:bar>/edit/<int:edit_id>
+	e.MergePatterns([]string{"<int:bar>", "/edit/", "<int:edit_id>"})
+	edit := mustHave(bar, "/edit/")
+	mustHave(edit, "<int:edit_id>")
+	if e.Len() != 1 {
+		t.Fatal("merge doesn't work properly")
+	}
+}
+
 // func TestNewEntry(t *testing.T) {
 // 	cases := make(map[string]Entry)
 // 	cases["/foo/":          newStatic("/foo/"),
