@@ -2,7 +2,6 @@ package patree
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 )
@@ -13,16 +12,15 @@ var matcherMap = map[string]Matcher{
 	"hex":     HexMatcher,
 }
 
-func NewEntry(s string) (Entry, error) {
-	// return static entry if the first char isn't '<'
-	if s[0] != '<' {
-		return newStaticEntry(s), nil
+func NewEntry(s string) Entry {
+	if len(s) > 2 && s[0] == '<' && s[len(s)-1] == '>' {
+		return newMatchEntry(s)
 	}
-	return newMatchEntry(s)
+	return newStaticEntry(s)
 }
 
 //
-// Entry 
+// Entry
 //
 type Entry interface {
 	Exec(method, s string) (http.Handler, []string)
@@ -55,7 +53,7 @@ func (e *BaseEntry) Pattern() string {
 }
 
 func newStaticEntry(pattern string) *StaticEntry {
-	base:= BaseEntry{
+	base := BaseEntry{
 		pattern,
 		make(map[string]http.Handler),
 		make([]Entry, 0),
@@ -106,17 +104,9 @@ type MatchEntry struct {
 	matcher Matcher
 }
 
-func newMatchEntry(pat string) (*MatchEntry, error) {
-	if pat[0] != '<' || pat[len(pat)-1] != '>' {
-		return nil, errors.New("invalid pattern: " + pat)
-	}
-
+func newMatchEntry(pat string) *MatchEntry {
 	s := pat[1 : len(pat)-1]
 	ss := strings.Split(s, ":")
-	if len(ss) > 2 {
-		return nil, fmt.Errorf("invalid match syntax: %s. Only one ':' is allowed", s)
-	}
-
 	var name, matchType string
 	if len(ss) == 1 {
 		name = ss[0]
@@ -130,7 +120,7 @@ func newMatchEntry(pat string) (*MatchEntry, error) {
 
 	matcher := matcherMap[matchType]
 	if matcher == nil {
-		return nil, errors.New("no such match type: " + matchType)
+		panic(errors.New("no such match type: " + matchType))
 	}
 
 	e := MatchEntry{
@@ -139,7 +129,7 @@ func newMatchEntry(pat string) (*MatchEntry, error) {
 		matcher,
 	}
 
-	return &e, nil
+	return &e
 }
 
 func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {

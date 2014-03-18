@@ -63,7 +63,7 @@ func TestIntMatchEntry(t *testing.T) {
 		"139093449850284011": true,
 	}
 
-	e, _ := newMatchEntry("<int:test_id>")
+	e := newMatchEntry("<int:test_id>")
 	e.handlers["GET"] = foobarHandler
 
 	for s, ok := range cases {
