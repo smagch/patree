@@ -27,14 +27,17 @@ type Entry interface {
 	Pattern() string
 	AddEntry(child Entry)
 	Len() int
-	MergePatterns([]string)
+	MergePatterns([]string) Entry
 	HasHandler(method string) bool
-	SetHandler(method string, h http.Handler) error
+	SetHandler(h http.Handler) error
+	SetMethodHandler(method string, h http.Handler) error
+	GetHandler(method string) http.Handler
 }
 
 type StaticEntry struct {
 	pattern  string
 	handlers map[string]http.Handler
+	handler  http.Handler
 	entries  []Entry
 }
 
@@ -42,7 +45,15 @@ func (e *StaticEntry) Len() int {
 	return len(e.entries)
 }
 
-func (e *StaticEntry) SetHandler(method string, h http.Handler) error {
+func (e *StaticEntry) SetHandler(h http.Handler) error {
+	if e.handler != nil {
+		return errors.New("Duplicate Handler registration")
+	}
+	e.handler = h
+	return nil
+}
+
+func (e *StaticEntry) SetMethodHandler(method string, h http.Handler) error {
 	if e.HasHandler(method) {
 		return errors.New("Duplicate Handler registration")
 	}
@@ -52,7 +63,15 @@ func (e *StaticEntry) SetHandler(method string, h http.Handler) error {
 
 func (e *StaticEntry) HasHandler(method string) bool {
 	_, ok := e.handlers[method]
-	return ok
+	return ok || e.handler != nil
+}
+
+func (e *StaticEntry) GetHandler(method string) http.Handler {
+	handler := e.handlers[method]
+	if handler == nil {
+		handler = e.handler
+	}
+	return handler
 }
 
 func (e *StaticEntry) Pattern() string {
@@ -68,16 +87,15 @@ func (e *StaticEntry) getChildEntry(pat string) Entry {
 	return nil
 }
 
-func (e *StaticEntry) MergePatterns(patterns []string) {
+func (e *StaticEntry) MergePatterns(patterns []string) Entry {
 	pat := patterns[0]
 	if child := e.getChildEntry(pat); child != nil {
 		if len(patterns) == 1 {
 			panic(errors.New("duplicate pattern: " + pat))
 		}
-		child.MergePatterns(patterns[1:])
-		return
+		return child.MergePatterns(patterns[1:])
 	}
-	e.addPatterns(patterns)
+	return e.addPatterns(patterns)
 }
 
 // TODO sort
@@ -85,20 +103,20 @@ func (e *StaticEntry) AddEntry(child Entry) {
 	e.entries = append(e.entries, child)
 }
 
-func (e *StaticEntry) addPatterns(patterns []string) {
+func (e *StaticEntry) addPatterns(patterns []string) Entry {
 	var currentNode Entry = Entry(e)
 	for _, pat := range patterns {
 		entry := NewEntry(pat)
 		currentNode.AddEntry(entry)
 		currentNode = entry
 	}
+	return currentNode
 }
 
 func newStaticEntry(pattern string) *StaticEntry {
 	return &StaticEntry{
-		pattern,
-		make(map[string]http.Handler),
-		make([]Entry, 0),
+		pattern:  pattern,
+		handlers: make(map[string]http.Handler),
 	}
 }
 
@@ -106,25 +124,18 @@ func (e *StaticEntry) Exec(method, str string) (http.Handler, []string) {
 	if !strings.HasPrefix(str, e.pattern) {
 		return nil, nil
 	}
-
-	var h http.Handler
-
 	if len(str) == len(e.pattern) {
-		h, _ = e.handlers[method]
-		// TODO
-		// create empty one? if handler exists???
-		return h, nil
+		return e.GetHandler(method), nil
 	}
+	return e.traverse(method, str[len(e.pattern):])
+}
 
-	// TODO
-	suffix := str[len(e.pattern):]
+func (e *StaticEntry) traverse(method, str string) (http.Handler, []string) {
 	for _, entry := range e.entries {
-		var params []string
-		if h, params = entry.Exec(method, suffix); h != nil {
+		if h, params := entry.Exec(method, str); h != nil {
 			return h, params
 		}
 	}
-
 	return nil, nil
 }
 
@@ -171,8 +182,10 @@ func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
 
 	// finish parsing
 	if len(str) == i {
-		h, _ := e.handlers[method]
-		return h, []string{e.name, str}
+		if h := e.GetHandler(method); h != nil {
+			return h, []string{e.name, str}
+		}
+		return nil, nil
 	}
 
 	for _, entry := range e.entries {
