@@ -139,10 +139,6 @@ func (e *StaticEntry) traverse(method, str string) (http.Handler, []string) {
 	return nil, nil
 }
 
-func (e *StaticEntry) add(child Entry) {
-	e.entries = append(e.entries, child)
-}
-
 //
 // Match
 //

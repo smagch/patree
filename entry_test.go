@@ -32,14 +32,14 @@ func TestStaticEntry(t *testing.T) {
 
 	child := newStaticEntry("/2000")
 	child.handlers["GET"] = foobarHandler
-	e.add(child)
+	e.AddEntry(child)
 	h, _ = e.Exec("GET", "/foobar/2000")
 	if h == nil {
 		t.Fatal("nested entry match failed")
 	}
 
 	parent := newStaticEntry("/api")
-	parent.add(e)
+	parent.AddEntry(e)
 	h, _ = parent.Exec("GET", "/api/foobar/2000")
 	if h == nil {
 		t.Fatal("should catch nested entry")
