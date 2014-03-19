@@ -28,7 +28,6 @@ type Entry interface {
 	AddEntry(child Entry)
 	Len() int
 	MergePatterns([]string) Entry
-	HasHandler(method string) bool
 	SetHandler(h http.Handler) error
 	SetMethodHandler(method string, h http.Handler) error
 	GetHandler(method string) http.Handler
@@ -54,16 +53,11 @@ func (e *StaticEntry) SetHandler(h http.Handler) error {
 }
 
 func (e *StaticEntry) SetMethodHandler(method string, h http.Handler) error {
-	if e.HasHandler(method) {
+	if e.GetHandler(method) != nil {
 		return errors.New("Duplicate Handler registration")
 	}
 	e.handlers[method] = h
 	return nil
-}
-
-func (e *StaticEntry) HasHandler(method string) bool {
-	_, ok := e.handlers[method]
-	return ok || e.handler != nil
 }
 
 func (e *StaticEntry) GetHandler(method string) http.Handler {
