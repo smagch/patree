@@ -85,7 +85,7 @@ func (e *StaticEntry) MergePatterns(patterns []string) Entry {
 	pat := patterns[0]
 	if child := e.getChildEntry(pat); child != nil {
 		if len(patterns) == 1 {
-			panic(errors.New("duplicate pattern: " + pat))
+			return child
 		}
 		return child.MergePatterns(patterns[1:])
 	}

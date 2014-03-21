@@ -14,6 +14,7 @@ func TestSplitPath(t *testing.T) {
 		"/foo/<int:bar>-page":       {"/foo/", "<int:bar>", "-page"},
 		"/foo/<int:bar>-page/":      {"/foo/", "<int:bar>", "-page/"},
 		"/foo/<int:bar>-page/about": {"/foo/", "<int:bar>", "-page/", "about"},
+		"/<int:bar>/about":          {"/", "<int:bar>", "/about"},
 	}
 	for p, expected := range cases {
 		ret := SplitPath(p)

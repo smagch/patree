@@ -33,20 +33,28 @@ func routeSplitFunc(data []byte, atEOF bool) (int, []byte, error) {
 		return 1, data, nil
 	}
 
-	matchIndex := bytes.IndexRune(data, '<')
+	// should ignore first '/'
 	slashIndex := bytes.IndexRune(data[1:], '/')
 	if slashIndex != -1 {
 		slashIndex++
 	}
+
+	matchIndex := bytes.IndexRune(data, '<')
+
+	// remaining string would be a static entry
 	if slashIndex == -1 && matchIndex == -1 {
 		return len(data), data, nil
 	}
 
-	if slashIndex > matchIndex {
-		return slashIndex + 1, data[:(slashIndex + 1)], nil
+	// split by '<'
+	// return data before '<'
+	if slashIndex > matchIndex && matchIndex != -1 {
+		return matchIndex, data[:matchIndex], nil
 	}
 
-	return matchIndex, data[:matchIndex], nil
+	// split by '/'
+	// return data before '/' including '/'
+	return slashIndex + 1, data[:(slashIndex + 1)], nil
 }
 
 func SplitPath(s string) []string {
