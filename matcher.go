@@ -1,5 +1,32 @@
 package patree
 
+import (
+	"errors"
+	"strings"
+)
+
+func parseMatcher(pat string) (matcher Matcher, name string) {
+	s := pat[1 : len(pat)-1]
+	ss := strings.Split(s, ":")
+	var matchType string
+	if len(ss) == 1 {
+		name = ss[0]
+	} else {
+		matchType = ss[0]
+		name = ss[1]
+	}
+	if matchType == "" {
+		matchType = "default"
+	}
+
+	matcher = matcherMap[matchType]
+	if matcher == nil {
+		panic(errors.New("no such match type: " + matchType))
+	}
+
+	return matcher, name
+}
+
 func isDigit(r rune) bool {
 	return '0' <= r && r <= '9'
 }
@@ -14,12 +41,7 @@ func isNotSlash(r rune) bool {
 
 type Matcher interface {
 	Match(s string) int
-}
-
-type MatcherFunc func(s string) int
-
-func (f MatcherFunc) Match(s string) int {
-	return f(s)
+	MatchRune(r rune) bool
 }
 
 type RuneMatcherFunc func(r rune) bool
@@ -43,9 +65,13 @@ func (f RuneMatcherFunc) Match(s string) int {
 	return length
 }
 
+func (f RuneMatcherFunc) MatchRune(r rune) bool {
+	return f(r)
+}
+
 type SuffixMatcher struct {
-	suffix string
-	f      RuneMatcherFunc
+	suffix  string
+	matcher Matcher
 }
 
 func (m *SuffixMatcher) Match(s string) int {
@@ -65,12 +91,16 @@ func (m *SuffixMatcher) Match(s string) int {
 			return i + len(m.suffix)
 		}
 
-		if !m.f(r) {
+		if !m.matcher.MatchRune(r) {
 			return -1
 		}
 	}
 
 	return -1
+}
+
+func (m *SuffixMatcher) MatchRune(r rune) bool {
+	return m.matcher.MatchRune(r)
 }
 
 var IntMatcher = RuneMatcherFunc(isDigit)

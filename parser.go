@@ -11,6 +11,10 @@ import (
 
 var NoClosingBracket = errors.New("Invalid syntax: No closing bracket found")
 
+func isMatchPattern(s string) bool {
+	return len(s) > 2 && s[0] == '<' && s[len(s)-1] == '>'
+}
+
 func routeSplitFunc(data []byte, atEOF bool) (int, []byte, error) {
 	// var b bytes.Buffer
 	if atEOF || data == nil {
@@ -65,4 +69,20 @@ func SplitPath(s string) []string {
 		routes = append(routes, scanner.Text())
 	}
 	return routes
+}
+
+func isNextSuffixPattern(p []string) bool {
+	if len(p) >= 2 && isMatchPattern(p[0]) && !isMatchPattern(p[1]) {
+		matcher, _ := parseMatcher(p[0])
+		r, _ := utf8.DecodeRuneInString(p[1])
+		return matcher.MatchRune(r)
+	}
+	return false
+}
+
+func PeekNextPattern(p []string) (string, int) {
+	if isNextSuffixPattern(p) {
+		return (p[0] + p[1]), 2
+	}
+	return p[0], 1
 }

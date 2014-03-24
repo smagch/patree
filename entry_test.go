@@ -94,6 +94,8 @@ func TestMergePattern(t *testing.T) {
 			child = entry.(*StaticEntry).getChildEntry(pat)
 		case *MatchEntry:
 			child = entry.(*MatchEntry).getChildEntry(pat)
+		case *SuffixMatchEntry:
+			child = entry.(*SuffixMatchEntry).getChildEntry(pat)
 		default:
 			t.Fatal("unknown entry type: ", v)
 		}
@@ -105,19 +107,27 @@ func TestMergePattern(t *testing.T) {
 		return child
 	}
 
-	//   1. /foo/<int:bar>/about
+	// 1. /foo/<int:bar>/about
 	e := NewEntry("/foo/")
 	e.MergePatterns([]string{"<int:bar>", "/about"})
 	bar := mustHave(e, "<int:bar>")
 	mustHave(bar, "/about")
 
-	//   2. /foo/<int:bar>/edit/<int:edit_id>
+	// 2. /foo/<int:bar>/edit/<int:edit_id>
 	e.MergePatterns([]string{"<int:bar>", "/edit/", "<int:edit_id>"})
 	edit := mustHave(bar, "/edit/")
 	mustHave(edit, "<int:edit_id>")
 	if e.Len() != 1 {
 		t.Fatal("merge doesn't work properly")
 	}
+
+	// 3. /foo/<int:bar>1234567890/edit
+	e.MergePatterns([]string{"<int:bar>", "1234567890", "/edit"})
+	intSuffixEntry := mustHave(e, "<int:bar>1234567890")
+	mustHave(intSuffixEntry, "/edit")
+
+	intSuffixEntry.MergePatterns([]string{"<hex:hex>", "f3ab34"})
+	mustHave(intSuffixEntry, "<hex:hex>f3ab34")
 }
 
 // func TestNewEntry(t *testing.T) {
