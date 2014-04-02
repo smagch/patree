@@ -1,13 +1,19 @@
+// package patree implements a simple http request multiplexer.
 package patree
 
 import (
 	"net/http"
 )
 
+// params is a map of matched request parameters. For example, a request with
+// url "/posts/2345" will have "post_id" key and "2345" value with pattern
+// "/posts/<int:post_id>".
 type params map[string]string
 
+// contexts stores params for http requests.
 var contexts = make(map[*http.Request]params)
 
+// Param returns a mathced request parameter with the given key.
 func Param(r *http.Request, key string) string {
 	return contexts[r][key]
 }
@@ -22,11 +28,13 @@ func createParams(p params, paramArray []string) params {
 	return p
 }
 
+// PatternTreeServeMux is an HTTP request multiplexer that does pattern matching.
 type PatternTreeServeMux struct {
 	StaticEntry
 	notfound http.Handler
 }
 
+// New creates a new muxer
 func New() *PatternTreeServeMux {
 	return &PatternTreeServeMux{
 		*newStaticEntry(""),
@@ -34,6 +42,7 @@ func New() *PatternTreeServeMux {
 	}
 }
 
+// ServeHTTP execute matched handler or execute notfound handler.
 func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h, paramArray := m.traverse(r.Method, r.URL.Path)
 	if h != nil {
@@ -46,6 +55,8 @@ func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// Handle a http.Handler with the given url pattern. panic with duplicate
+// handler registration for a pattern.
 func (m *PatternTreeServeMux) Handle(pat string, h http.Handler) {
 	patterns := SplitPath(pat)
 	leafEntry := m.MergePatterns(patterns)
@@ -54,6 +65,8 @@ func (m *PatternTreeServeMux) Handle(pat string, h http.Handler) {
 	}
 }
 
+// Handle the handler with the given http method and pattern. Panic with
+// duplicate handler registration.
 func (m *PatternTreeServeMux) HandleMethod(method, pat string, h http.Handler) {
 	patterns := SplitPath(pat)
 	leafEntry := m.MergePatterns(patterns)
@@ -62,35 +75,43 @@ func (m *PatternTreeServeMux) HandleMethod(method, pat string, h http.Handler) {
 	}
 }
 
+// Get registers the handler with the given pattern for "GET" and "HEAD" method.
 func (m *PatternTreeServeMux) Get(pat string, h http.Handler) {
 	m.HandleMethod("GET", pat, h)
 	m.HandleMethod("HEAD", pat, h)
 }
 
+// Post registers the handler with the given pattern for "POST" method.
 func (m *PatternTreeServeMux) Post(pat string, h http.Handler) {
 	m.HandleMethod("POST", pat, h)
 }
 
+// Put registers the handler with the given pattern for "PUT" method.
 func (m *PatternTreeServeMux) Put(pat string, h http.Handler) {
 	m.HandleMethod("PUT", pat, h)
 }
 
+// Patch registers the handler with the given pattern for "PATCH" method.
 func (m *PatternTreeServeMux) Patch(pat string, h http.Handler) {
 	m.HandleMethod("PATCH", pat, h)
 }
 
+// Delete registers the handler with the give pattern for "DELETE" method.
 func (m *PatternTreeServeMux) Delete(pat string, h http.Handler) {
 	m.HandleMethod("DELETE", pat, h)
 }
 
+// Options registers the handler with the given pattern for "OPTIONS" method.
 func (m *PatternTreeServeMux) Options(pat string, h http.Handler) {
 	m.HandleMethod("OPTIONS", pat, h)
 }
 
+// NotFound registers fallback HandlerFunc in case no pattern matches.
 func (m *PatternTreeServeMux) NotFound(f http.HandlerFunc) {
 	m.NotFoundHandler(http.HandlerFunc(f))
 }
 
+// NotFoundHandler reigsters fallback Handler in case no pattern matches.
 func (m *PatternTreeServeMux) NotFoundHandler(h http.Handler) {
 	m.notfound = h
 }
