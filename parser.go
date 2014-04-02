@@ -51,7 +51,7 @@ func routeSplitFunc(data []byte, atEOF bool) (int, []byte, error) {
 
 	// split by '<'
 	// return data before '<'
-	if slashIndex > matchIndex && matchIndex != -1 {
+	if matchIndex != -1 && (slashIndex == -1 || slashIndex > matchIndex) {
 		return matchIndex, data[:matchIndex], nil
 	}
 

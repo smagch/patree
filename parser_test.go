@@ -27,7 +27,8 @@ func TestSplitPath(t *testing.T) {
 	}
 
 	errorCases := []string{
-		"/foo/<bar:", "/posts/<int", "/posts/<int:post_id", "<int",
+		"/foo/<bar:", "/posts/<int", "/posts/<int:post_id", "<int", "/foo<bar",
+		"/foo<bar<hoge", "/<int",
 	}
 
 	for _, p := range errorCases {
