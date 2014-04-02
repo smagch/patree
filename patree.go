@@ -58,9 +58,13 @@ func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 // Handle a http.Handler with the given url pattern. panic with duplicate
 // handler registration for a pattern.
 func (m *PatternTreeServeMux) Handle(pat string, h http.Handler) {
-	patterns := SplitPath(pat)
+	patterns, err := SplitPath(pat)
+	if err != nil {
+		panic(err)
+	}
 	leafEntry := m.MergePatterns(patterns)
-	if err := leafEntry.SetHandler(h); err != nil {
+	err = leafEntry.SetHandler(h)
+	if err != nil {
 		panic(err)
 	}
 }
@@ -68,9 +72,13 @@ func (m *PatternTreeServeMux) Handle(pat string, h http.Handler) {
 // Handle the handler with the given http method and pattern. Panic with
 // duplicate handler registration.
 func (m *PatternTreeServeMux) HandleMethod(method, pat string, h http.Handler) {
-	patterns := SplitPath(pat)
+	patterns, err := SplitPath(pat)
+	if err != nil {
+		panic(err)
+	}
 	leafEntry := m.MergePatterns(patterns)
-	if err := leafEntry.SetMethodHandler(method, h); err != nil {
+	err = leafEntry.SetMethodHandler(method, h)
+	if err != nil {
 		panic(err)
 	}
 }

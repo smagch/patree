@@ -17,9 +17,26 @@ func TestSplitPath(t *testing.T) {
 		"/<int:bar>/about":          {"/", "<int:bar>", "/about"},
 	}
 	for p, expected := range cases {
-		ret := SplitPath(p)
+		ret, err := SplitPath(p)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !reflect.DeepEqual(ret, expected) {
 			t.Fatalf("Got %v instead of expected %v with input %s", ret, expected, p)
+		}
+	}
+
+	errorCases := []string{
+		"/foo/<bar:", "/posts/<int", "/posts/<int:post_id", "<int",
+	}
+
+	for _, p := range errorCases {
+		_, err := SplitPath(p)
+		if err == nil {
+			t.Fatalf("it should have error with pattern %s\n", p)
+		}
+		if err != NoClosingBracket {
+			t.Fatal(err)
 		}
 	}
 }

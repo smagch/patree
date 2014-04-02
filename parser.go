@@ -16,7 +16,6 @@ func isMatchPattern(s string) bool {
 }
 
 func routeSplitFunc(data []byte, atEOF bool) (int, []byte, error) {
-	// var b bytes.Buffer
 	if atEOF || data == nil {
 		return 0, nil, io.EOF
 	}
@@ -61,14 +60,15 @@ func routeSplitFunc(data []byte, atEOF bool) (int, []byte, error) {
 	return slashIndex + 1, data[:(slashIndex + 1)], nil
 }
 
-func SplitPath(s string) []string {
-	scanner := bufio.NewScanner(strings.NewReader(s))
+// SplitPath splits the url pattern to entries.
+func SplitPath(pat string) (routes []string, err error) {
+	scanner := bufio.NewScanner(strings.NewReader(pat))
 	scanner.Split(routeSplitFunc)
-	routes := make([]string, 0)
 	for scanner.Scan() {
 		routes = append(routes, scanner.Text())
 	}
-	return routes
+	err = scanner.Err()
+	return
 }
 
 func isNextSuffixPattern(p []string) bool {
@@ -80,9 +80,12 @@ func isNextSuffixPattern(p []string) bool {
 	return false
 }
 
-func PeekNextPattern(p []string) (string, int) {
+// PeekNextPattern returns next entry pattern with offset size
+func PeekNextPattern(p []string) (pat string, size int) {
 	if isNextSuffixPattern(p) {
-		return (p[0] + p[1]), 2
+		pat, size = (p[0] + p[1]), 2
+	} else {
+		pat, size = p[0], 1
 	}
-	return p[0], 1
+	return
 }
