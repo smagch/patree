@@ -30,7 +30,7 @@ func (e *Entry) Len() int {
 	return len(e.entries)
 }
 
-// SetHandler
+// SetHandler reigsters the given handler that matches with any method.
 func (e *Entry) SetHandler(h http.Handler) error {
 	if e.handler != nil {
 		return errors.New("Duplicate Handler registration")
@@ -39,6 +39,7 @@ func (e *Entry) SetHandler(h http.Handler) error {
 	return nil
 }
 
+// SetMethodHandler reigsters the given handler for the method.
 func (e *Entry) SetMethodHandler(method string, h http.Handler) error {
 	if e.GetHandler(method) != nil {
 		return errors.New("Duplicate Handler registration")
@@ -47,6 +48,7 @@ func (e *Entry) SetMethodHandler(method string, h http.Handler) error {
 	return nil
 }
 
+// GetHandler returns a handler with given method.
 func (e *Entry) GetHandler(method string) http.Handler {
 	handler := e.handlers[method]
 	if handler == nil {
@@ -60,6 +62,7 @@ func (e *Entry) Pattern() string {
 	return e.pattern
 }
 
+// getChildEntry returns a child Entry that matches the given pattern string.
 func (e *Entry) getChildEntry(pat string) *Entry {
 	for _, entry := range e.entries {
 		if pat == entry.Pattern() {
@@ -69,6 +72,8 @@ func (e *Entry) getChildEntry(pat string) *Entry {
 	return nil
 }
 
+// MergePattern add entry patterns with given pattern strings. If a pattern
+// already exists on the entry, it adds remaining patterns to the existing entry.
 func (e *Entry) MergePatterns(patterns []string) *Entry {
 	pat, size := PeekNextPattern(patterns)
 	if child := e.getChildEntry(pat); child != nil {
@@ -80,11 +85,14 @@ func (e *Entry) MergePatterns(patterns []string) *Entry {
 	return e.addPatterns(patterns)
 }
 
+// AddEntry add new child entry.
+//
 // TODO sort
 func (e *Entry) AddEntry(child *Entry) {
 	e.entries = append(e.entries, child)
 }
 
+// addPatterns adds entry children with the pattern strings.
 func (e *Entry) addPatterns(patterns []string) *Entry {
 	var currentNode *Entry = e
 	for len(patterns) > 0 {
@@ -135,6 +143,7 @@ func newSuffixMatchEntry(pat, name string, matcher Matcher) *Entry {
 	return entry
 }
 
+// execPrefix simply see if the given urlStr has a leading pattern.
 func (e *Entry) execPrefix(method, urlStr string) (http.Handler, []string) {
 	if !strings.HasPrefix(urlStr, e.pattern) {
 		return nil, nil
@@ -145,15 +154,17 @@ func (e *Entry) execPrefix(method, urlStr string) (http.Handler, []string) {
 	return e.traverse(method, urlStr[len(e.pattern):])
 }
 
-func (e *Entry) traverse(method, str string) (http.Handler, []string) {
+// traverse tries matches to child entries.
+func (e *Entry) traverse(method, urlStr string) (http.Handler, []string) {
 	for _, entry := range e.entries {
-		if h, params := entry.exec(method, str); h != nil {
+		if h, params := entry.exec(method, urlStr); h != nil {
 			return h, params
 		}
 	}
 	return nil, nil
 }
 
+// getExecMatch returns ExecFunc with the given name and mather.
 func (e *Entry) getExecMatch(name string, matcher Matcher) ExecFunc {
 	return func(method, urlStr string) (http.Handler, []string) {
 		offset, matchStr := matcher.Match(urlStr)

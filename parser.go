@@ -13,6 +13,44 @@ import (
 // bracket '>' after opening bracket '<'.
 var NoClosingBracket = errors.New("Invalid syntax: No closing bracket found")
 
+// MatherMap stores Matchers with matcher pattern type keys. For example,
+// Pattern "<int:id>" will be an IntMatcher.
+// Pattern "<hex:id> will be a HexMatcher.
+// Pattern "<id>" will be a DefaultMatcher.
+var MatcherMap = map[string]Matcher{
+	"default": DefaultMatcher,
+	"int":     IntMatcher,
+	"hex":     HexMatcher,
+}
+
+// parseMatcher returns matcher and name from the given pattern string.
+func parseMatcher(pat string) (matcher Matcher, name string) {
+	if !isMatchPattern(pat) {
+		panic("pattern \"" + pat + "\" is not a matcher pattern")
+	}
+
+	s := pat[1 : len(pat)-1]
+	ss := strings.Split(s, ":")
+	var matchType string
+	if len(ss) == 1 {
+		name = ss[0]
+	} else {
+		matchType = ss[0]
+		name = ss[1]
+	}
+	if matchType == "" {
+		matchType = "default"
+	}
+
+	matcher = MatcherMap[matchType]
+	if matcher == nil {
+		panic(errors.New("no such match type: " + matchType))
+	}
+
+	return matcher, name
+}
+
+// isMatchPattern see if given string is match pattern.
 func isMatchPattern(s string) bool {
 	return len(s) > 2 && s[0] == '<' && s[len(s)-1] == '>'
 }
@@ -74,6 +112,12 @@ func SplitPath(pat string) (routes []string, err error) {
 	return
 }
 
+// isNextSuffixPattern see next 2 patterns can be suffix matcher. If following
+// two cases are both true, it could possibly become a suffix matcher.
+//   1. the first pattern is a Matcher.
+//   2. the next pattern is a static pattern.
+// If the first matcher can't match the first rune of the second static pattern,
+// next pattern should be a suffix matcher combined the two patterns.
 func isNextSuffixPattern(p []string) bool {
 	if len(p) >= 2 && isMatchPattern(p[0]) && !isMatchPattern(p[1]) {
 		matcher, _ := parseMatcher(p[0])

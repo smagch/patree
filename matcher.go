@@ -39,13 +39,17 @@ func isNotSlash(r rune) bool {
 	return r != '/'
 }
 
+// Matcher is the interface that processes pattern matching.
 type Matcher interface {
 	Match(str string) (offset int, matchStr string)
 	MatchRune(r rune) bool
 }
 
+// RuneMatcherFunc see if the given rune matches.
 type RuneMatcherFunc func(r rune) bool
 
+// Match processes the given string until it encounters a rune that doesn't
+// match.
 func (f RuneMatcherFunc) Match(str string) (offset int, matchStr string) {
 	offset = -1
 	length := len(str)
@@ -70,15 +74,19 @@ func (f RuneMatcherFunc) Match(str string) (offset int, matchStr string) {
 	return
 }
 
+// MatchRune simply calls RuneMatcherFunc
 func (f RuneMatcherFunc) MatchRune(r rune) bool {
 	return f(r)
 }
 
+// SuffixMatcher is the matcher that has a static suffix string pattern.
 type SuffixMatcher struct {
 	suffix  string
 	matcher Matcher
 }
 
+// Match processes the given string until it has its suffix in the next or
+// encounters a rune that doesn't match.
 func (m *SuffixMatcher) Match(str string) (offset int, matchStr string) {
 	offset = -1
 
@@ -107,6 +115,7 @@ func (m *SuffixMatcher) Match(str string) (offset int, matchStr string) {
 	return
 }
 
+// MatchRune simply calls mather.MatchRune
 func (m *SuffixMatcher) MatchRune(r rune) bool {
 	return m.matcher.MatchRune(r)
 }
