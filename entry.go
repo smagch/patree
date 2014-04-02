@@ -6,15 +6,35 @@ import (
 	"strings"
 )
 
-var matcherMap = map[string]Matcher{
-	"default": DefaultMatcher,
-	"int":     IntMatcher,
-	"hex":     HexMatcher,
-}
-
 // ExecFunc is pattern match function that returns handler and matched request
 // url parameters.
 type ExecFunc func(method, urlStr string) (http.Handler, []string)
+
+func newEntry(pat string) *Entry {
+	return &Entry{
+		pattern:  pat,
+		handlers: make(map[string]http.Handler),
+	}
+}
+
+func newStaticEntry(pat string) *Entry {
+	entry := newEntry(pat)
+	entry.exec = entry.execPrefix
+	return entry
+}
+
+func newMatchEntry(pat string) *Entry {
+	entry := newEntry(pat)
+	matcher, name := parseMatcher(pat)
+	entry.exec = entry.getExecMatch(name, matcher)
+	return entry
+}
+
+func newSuffixMatchEntry(pat, name string, matcher Matcher) *Entry {
+	entry := newEntry(pat)
+	entry.exec = entry.getExecMatch(name, matcher)
+	return entry
+}
 
 // Entry is a pattern node.
 type Entry struct {
@@ -115,32 +135,6 @@ func (e *Entry) addPatterns(patterns []string) *Entry {
 		patterns = patterns[size:]
 	}
 	return currentNode
-}
-
-func newEntry(pat string) *Entry {
-	return &Entry{
-		pattern:  pat,
-		handlers: make(map[string]http.Handler),
-	}
-}
-
-func newStaticEntry(pat string) *Entry {
-	entry := newEntry(pat)
-	entry.exec = entry.execPrefix
-	return entry
-}
-
-func newMatchEntry(pat string) *Entry {
-	entry := newEntry(pat)
-	matcher, name := parseMatcher(pat)
-	entry.exec = entry.getExecMatch(name, matcher)
-	return entry
-}
-
-func newSuffixMatchEntry(pat, name string, matcher Matcher) *Entry {
-	entry := newEntry(pat)
-	entry.exec = entry.getExecMatch(name, matcher)
-	return entry
 }
 
 // execPrefix simply see if the given urlStr has a leading pattern.

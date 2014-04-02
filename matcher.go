@@ -1,31 +1,10 @@
 package patree
 
-import (
-	"errors"
-	"strings"
+var (
+	IntMatcher     = RuneMatcherFunc(isDigit)
+	HexMatcher     = RuneMatcherFunc(isHex)
+	DefaultMatcher = RuneMatcherFunc(isNotSlash)
 )
-
-func parseMatcher(pat string) (matcher Matcher, name string) {
-	s := pat[1 : len(pat)-1]
-	ss := strings.Split(s, ":")
-	var matchType string
-	if len(ss) == 1 {
-		name = ss[0]
-	} else {
-		matchType = ss[0]
-		name = ss[1]
-	}
-	if matchType == "" {
-		matchType = "default"
-	}
-
-	matcher = matcherMap[matchType]
-	if matcher == nil {
-		panic(errors.New("no such match type: " + matchType))
-	}
-
-	return matcher, name
-}
 
 func isDigit(r rune) bool {
 	return '0' <= r && r <= '9'
@@ -119,7 +98,3 @@ func (m *SuffixMatcher) Match(str string) (offset int, matchStr string) {
 func (m *SuffixMatcher) MatchRune(r rune) bool {
 	return m.matcher.MatchRune(r)
 }
-
-var IntMatcher = RuneMatcherFunc(isDigit)
-var HexMatcher = RuneMatcherFunc(isHex)
-var DefaultMatcher = RuneMatcherFunc(isNotSlash)
