@@ -9,12 +9,15 @@ import (
 	"unicode/utf8"
 )
 
+// NoClosingBracket is the error returned by SplitPath when there is no closing
+// bracket '>' after opening bracket '<'.
 var NoClosingBracket = errors.New("Invalid syntax: No closing bracket found")
 
 func isMatchPattern(s string) bool {
 	return len(s) > 2 && s[0] == '<' && s[len(s)-1] == '>'
 }
 
+// routeSplitFunc is the SplitFunc to scan url pattern.
 func routeSplitFunc(data []byte, atEOF bool) (int, []byte, error) {
 	if atEOF || data == nil {
 		return 0, nil, io.EOF
@@ -60,7 +63,7 @@ func routeSplitFunc(data []byte, atEOF bool) (int, []byte, error) {
 	return slashIndex + 1, data[:(slashIndex + 1)], nil
 }
 
-// SplitPath splits the url pattern to entries.
+// SplitPath splits the url pattern.
 func SplitPath(pat string) (routes []string, err error) {
 	scanner := bufio.NewScanner(strings.NewReader(pat))
 	scanner.Split(routeSplitFunc)
