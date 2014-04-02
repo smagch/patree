@@ -30,21 +30,23 @@ func createParams(p params, paramArray []string) params {
 
 // PatternTreeServeMux is an HTTP request multiplexer that does pattern matching.
 type PatternTreeServeMux struct {
-	StaticEntry
-	notfound http.Handler
+	rootEntry *Entry
+	notfound  http.Handler
 }
 
 // New creates a new muxer
 func New() *PatternTreeServeMux {
+	entry := newStaticEntry("")
+	entry.exec = entry.traverse
 	return &PatternTreeServeMux{
-		*newStaticEntry(""),
-		http.NotFoundHandler(),
+		rootEntry: entry,
+		notfound:  http.NotFoundHandler(),
 	}
 }
 
 // ServeHTTP execute matched handler or execute notfound handler.
 func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h, paramArray := m.traverse(r.Method, r.URL.Path)
+	h, paramArray := m.rootEntry.exec(r.Method, r.URL.Path)
 	if h != nil {
 		p := createParams(contexts[r], paramArray)
 		contexts[r] = p
@@ -62,7 +64,7 @@ func (m *PatternTreeServeMux) Handle(pat string, h http.Handler) {
 	if err != nil {
 		panic(err)
 	}
-	leafEntry := m.MergePatterns(patterns)
+	leafEntry := m.rootEntry.MergePatterns(patterns)
 	err = leafEntry.SetHandler(h)
 	if err != nil {
 		panic(err)
@@ -76,7 +78,7 @@ func (m *PatternTreeServeMux) HandleMethod(method, pat string, h http.Handler) {
 	if err != nil {
 		panic(err)
 	}
-	leafEntry := m.MergePatterns(patterns)
+	leafEntry := m.rootEntry.MergePatterns(patterns)
 	err = leafEntry.SetMethodHandler(method, h)
 	if err != nil {
 		panic(err)

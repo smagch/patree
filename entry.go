@@ -12,39 +12,26 @@ var matcherMap = map[string]Matcher{
 	"hex":     HexMatcher,
 }
 
-func NewEntry(s string) Entry {
-	if len(s) > 2 && s[0] == '<' && s[len(s)-1] == '>' {
-		return newMatchEntry(s)
-	}
-	return newStaticEntry(s)
-}
+// ExecFunc is pattern match function that returns handler and matched request
+// url parameters.
+type ExecFunc func(method, urlStr string) (http.Handler, []string)
 
-//
-// Entry
-//
-type Entry interface {
-	Exec(method, s string) (http.Handler, []string)
-	Pattern() string
-	AddEntry(child Entry)
-	Len() int
-	MergePatterns([]string) Entry
-	SetHandler(h http.Handler) error
-	SetMethodHandler(method string, h http.Handler) error
-	GetHandler(method string) http.Handler
-}
-
-type StaticEntry struct {
+// Entry is a pattern node.
+type Entry struct {
 	pattern  string
 	handlers map[string]http.Handler
 	handler  http.Handler
-	entries  []Entry
+	entries  []*Entry
+	exec     ExecFunc
 }
 
-func (e *StaticEntry) Len() int {
+// Len returns a total number of child entries.
+func (e *Entry) Len() int {
 	return len(e.entries)
 }
 
-func (e *StaticEntry) SetHandler(h http.Handler) error {
+// SetHandler
+func (e *Entry) SetHandler(h http.Handler) error {
 	if e.handler != nil {
 		return errors.New("Duplicate Handler registration")
 	}
@@ -52,7 +39,7 @@ func (e *StaticEntry) SetHandler(h http.Handler) error {
 	return nil
 }
 
-func (e *StaticEntry) SetMethodHandler(method string, h http.Handler) error {
+func (e *Entry) SetMethodHandler(method string, h http.Handler) error {
 	if e.GetHandler(method) != nil {
 		return errors.New("Duplicate Handler registration")
 	}
@@ -60,7 +47,7 @@ func (e *StaticEntry) SetMethodHandler(method string, h http.Handler) error {
 	return nil
 }
 
-func (e *StaticEntry) GetHandler(method string) http.Handler {
+func (e *Entry) GetHandler(method string) http.Handler {
 	handler := e.handlers[method]
 	if handler == nil {
 		handler = e.handler
@@ -68,11 +55,12 @@ func (e *StaticEntry) GetHandler(method string) http.Handler {
 	return handler
 }
 
-func (e *StaticEntry) Pattern() string {
+// Pattern returns a string that the entry represents.
+func (e *Entry) Pattern() string {
 	return e.pattern
 }
 
-func (e *StaticEntry) getChildEntry(pat string) Entry {
+func (e *Entry) getChildEntry(pat string) *Entry {
 	for _, entry := range e.entries {
 		if pat == entry.Pattern() {
 			return entry
@@ -81,7 +69,7 @@ func (e *StaticEntry) getChildEntry(pat string) Entry {
 	return nil
 }
 
-func (e *StaticEntry) MergePatterns(patterns []string) Entry {
+func (e *Entry) MergePatterns(patterns []string) *Entry {
 	pat, size := PeekNextPattern(patterns)
 	if child := e.getChildEntry(pat); child != nil {
 		if len(patterns) == size {
@@ -93,23 +81,25 @@ func (e *StaticEntry) MergePatterns(patterns []string) Entry {
 }
 
 // TODO sort
-func (e *StaticEntry) AddEntry(child Entry) {
+func (e *Entry) AddEntry(child *Entry) {
 	e.entries = append(e.entries, child)
 }
 
-func (e *StaticEntry) addPatterns(patterns []string) Entry {
-	var currentNode Entry = Entry(e)
+func (e *Entry) addPatterns(patterns []string) *Entry {
+	var currentNode *Entry = e
 	for len(patterns) > 0 {
-		var entry Entry
+		var entry *Entry
 		pat, size := PeekNextPattern(patterns)
 
 		// suffix entry
 		if size == 2 {
 			matcher, name := parseMatcher(patterns[0])
-			suffixMatcher := SuffixMatcher{patterns[1], matcher}
+			suffixMatcher := &SuffixMatcher{patterns[1], matcher}
 			entry = newSuffixMatchEntry(pat, name, suffixMatcher)
+		} else if isMatchPattern(pat) {
+			entry = newMatchEntry(pat)
 		} else {
-			entry = NewEntry(pat)
+			entry = newStaticEntry(pat)
 		}
 
 		currentNode.AddEntry(entry)
@@ -119,109 +109,72 @@ func (e *StaticEntry) addPatterns(patterns []string) Entry {
 	return currentNode
 }
 
-func newStaticEntry(pattern string) *StaticEntry {
-	return &StaticEntry{
-		pattern:  pattern,
+func newEntry(pat string) *Entry {
+	return &Entry{
+		pattern:  pat,
 		handlers: make(map[string]http.Handler),
 	}
 }
 
-func (e *StaticEntry) Exec(method, str string) (http.Handler, []string) {
-	if !strings.HasPrefix(str, e.pattern) {
+func newStaticEntry(pat string) *Entry {
+	entry := newEntry(pat)
+	entry.exec = entry.execPrefix
+	return entry
+}
+
+func newMatchEntry(pat string) *Entry {
+	entry := newEntry(pat)
+	matcher, name := parseMatcher(pat)
+	entry.exec = entry.getExecMatch(name, matcher)
+	return entry
+}
+
+func newSuffixMatchEntry(pat, name string, matcher Matcher) *Entry {
+	entry := newEntry(pat)
+	entry.exec = entry.getExecMatch(name, matcher)
+	return entry
+}
+
+func (e *Entry) execPrefix(method, urlStr string) (http.Handler, []string) {
+	if !strings.HasPrefix(urlStr, e.pattern) {
 		return nil, nil
 	}
-	if len(str) == len(e.pattern) {
+	if len(urlStr) == len(e.pattern) {
 		return e.GetHandler(method), nil
 	}
-	return e.traverse(method, str[len(e.pattern):])
+	return e.traverse(method, urlStr[len(e.pattern):])
 }
 
-func (e *StaticEntry) traverse(method, str string) (http.Handler, []string) {
+func (e *Entry) traverse(method, str string) (http.Handler, []string) {
 	for _, entry := range e.entries {
-		if h, params := entry.Exec(method, str); h != nil {
+		if h, params := entry.exec(method, str); h != nil {
 			return h, params
 		}
 	}
 	return nil, nil
 }
 
-//
-// Match
-//
-type MatchEntry struct {
-	StaticEntry
-	name    string
-	matcher Matcher
-}
-
-func newMatchEntry(pat string) *MatchEntry {
-	matcher, name := parseMatcher(pat)
-	return &MatchEntry{*newStaticEntry(pat), name, matcher}
-}
-
-func (e *MatchEntry) Exec(method, str string) (http.Handler, []string) {
-	i := e.matcher.Match(str)
-	if i == -1 {
-		return nil, nil
-	}
-
-	// finish parsing
-	if len(str) == i {
-		if h := e.GetHandler(method); h != nil {
-			return h, []string{e.name, str}
+func (e *Entry) getExecMatch(name string, matcher Matcher) ExecFunc {
+	return func(method, urlStr string) (http.Handler, []string) {
+		offset, matchStr := matcher.Match(urlStr)
+		if offset == -1 {
+			return nil, nil
 		}
-		return nil, nil
-	}
 
-	for _, entry := range e.entries {
-		if h, params := entry.Exec(method, str[i:]); h != nil {
-			if params == nil {
-				params = []string{e.name, str[:i]}
-			} else {
-				params = append(params, e.name, str[:i])
+		// finish parsing
+		if len(urlStr) == offset {
+			if h := e.GetHandler(method); h != nil {
+				return h, []string{name, matchStr}
 			}
-			return h, params
+			return nil, nil
 		}
-	}
 
-	return nil, nil
-}
-
-//
-// Suffix
-//
-type SuffixMatchEntry struct {
-	StaticEntry
-	name     string
-	matcher  SuffixMatcher
-}
-
-func newSuffixMatchEntry(pat, name string, m SuffixMatcher) *SuffixMatchEntry {
-	return &SuffixMatchEntry{*newStaticEntry(pat), name, m}
-}
-
-func (e *SuffixMatchEntry) Exec(method, s string) (http.Handler, []string) {
-	i := e.matcher.Match(s)
-	if i == -1 {
+		for _, entry := range e.entries {
+			if h, params := entry.exec(method, urlStr[offset:]); h != nil {
+				params = append(params, name, matchStr)
+				return h, params
+			}
+		}
 		return nil, nil
 	}
-
-	// finish parsing
-	if len(s) == i {
-		h, _ := e.handlers[method]
-		return h, []string{e.name, s[:(i - len(e.matcher.suffix))]}
-	}
-
-	for _, entry := range e.entries {
-		if h, params := entry.Exec(method, s[i:]); h != nil {
-			if params == nil {
-				params = []string{e.name, s[:(i - len(e.matcher.suffix))]}
-			} else {
-				params = append(params, e.name, s[:(i-len(e.matcher.suffix))])
-			}
-			return h, params
-		}
-	}
-
-	return nil, nil
 }

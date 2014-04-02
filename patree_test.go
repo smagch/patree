@@ -23,7 +23,7 @@ func TestParameters(t *testing.T) {
 	}
 
 	for url, params := range cases {
-		h, p := m.traverse("GET", url)
+		h, p := m.rootEntry.traverse("GET", url)
 		if h == nil {
 			t.Fatalf("handler should exist")
 		}
@@ -34,7 +34,7 @@ func TestParameters(t *testing.T) {
 
 	// notfounds
 	for _, url := range []string{"/foo/", "/foo", "/", "/foo/hoge"} {
-		if h, p := m.traverse("GET", url); h != nil || p != nil {
+		if h, p := m.rootEntry.traverse("GET", url); h != nil || p != nil {
 			t.Fatalf("URL \"%s\" should be notfound")
 		}
 	}

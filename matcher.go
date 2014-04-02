@@ -40,29 +40,34 @@ func isNotSlash(r rune) bool {
 }
 
 type Matcher interface {
-	Match(s string) int
+	Match(str string) (offset int, matchStr string)
 	MatchRune(r rune) bool
 }
 
 type RuneMatcherFunc func(r rune) bool
 
-func (f RuneMatcherFunc) Match(s string) int {
-	length := len(s)
+func (f RuneMatcherFunc) Match(str string) (offset int, matchStr string) {
+	offset = -1
+	length := len(str)
 	if length == 0 {
-		return -1
+		return
 	}
 
-	for i, r := range s {
+	for i, r := range str {
 		if f(r) {
 			continue
 		}
 		if i != 0 {
-			return i
+			offset = i
+			matchStr = str[:i]
+			return
 		}
-		return -1
+		return
 	}
 
-	return length
+	offset = length
+	matchStr = str
+	return
 }
 
 func (f RuneMatcherFunc) MatchRune(r rune) bool {
@@ -74,29 +79,32 @@ type SuffixMatcher struct {
 	matcher Matcher
 }
 
-func (m *SuffixMatcher) Match(s string) int {
-	d := len(s) - len(m.suffix)
+func (m *SuffixMatcher) Match(str string) (offset int, matchStr string) {
+	offset = -1
+
 	// at least 1 character is required to match suffix and matcher
+	d := len(str) - len(m.suffix)
 	if d < 1 {
-		return -1
+		return
 	}
 
-	for i, r := range s {
+	for i, r := range str {
 		if i > d {
-			return -1
+			return
 		}
 
 		// peek string to match to suffix pattern
-		if i != 0 && m.suffix == s[i:i+len(m.suffix)] {
-			return i + len(m.suffix)
+		if i != 0 && m.suffix == str[i:i+len(m.suffix)] {
+			offset = i + len(m.suffix)
+			matchStr = str[:i]
+			return
 		}
 
 		if !m.matcher.MatchRune(r) {
-			return -1
+			return
 		}
 	}
-
-	return -1
+	return
 }
 
 func (m *SuffixMatcher) MatchRune(r rune) bool {
