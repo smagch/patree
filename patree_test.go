@@ -42,7 +42,7 @@ func TestParameters(t *testing.T) {
 
 func TestHandlers(t *testing.T) {
 	m := New()
-	m.NotFound(func(w http.ResponseWriter, r *http.Request) {
+	m.NotFoundFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("Should not be NotFound: %s", r.URL)
 	})
 

@@ -116,12 +116,12 @@ func (m *PatternTreeServeMux) Options(pat string, h http.Handler) {
 	m.HandleMethod("OPTIONS", pat, h)
 }
 
-// NotFound registers fallback HandlerFunc in case no pattern matches.
-func (m *PatternTreeServeMux) NotFound(f http.HandlerFunc) {
-	m.NotFoundHandler(http.HandlerFunc(f))
+// NotFoundFunc registers fallback HandlerFunc in case no pattern matches.
+func (m *PatternTreeServeMux) NotFoundFunc(f http.HandlerFunc) {
+	m.NotFound(http.HandlerFunc(f))
 }
 
-// NotFoundHandler reigsters fallback Handler in case no pattern matches.
-func (m *PatternTreeServeMux) NotFoundHandler(h http.Handler) {
+// NotFound reigsters fallback Handler in case no pattern matches.
+func (m *PatternTreeServeMux) NotFound(h http.Handler) {
 	m.notfound = h
 }
