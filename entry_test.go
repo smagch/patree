@@ -117,3 +117,34 @@ func TestMergePattern(t *testing.T) {
 	intSuffixEntry.MergePatterns([]string{"<hex:hex>", "f3ab34"})
 	mustHave(intSuffixEntry, "<hex:hex>f3ab34")
 }
+
+func TestOrder(t *testing.T) {
+	entry := newStaticEntry("/posts/")
+	testCases := []struct {
+		pattern string
+		index   int
+	}{
+		{"<int:post_id>", 5},
+		{"<int:post_id>12345", 4},
+		{"2014-03", 1},
+		{"2014", 2},
+		{"2013", 3},
+		{"this-is-the-slug-of-post", 0},
+	}
+
+	for _, testCase := range testCases {
+		patterns, err := SplitPath(testCase.pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entry.MergePatterns(patterns)
+	}
+
+	for _, testCase := range testCases {
+		child := entry.entries[testCase.index]
+		if child.Pattern() != testCase.pattern {
+			t.Errorf("Pattern %s is at %d instead of %s\n", child.Pattern(),
+				testCase.index, testCase.pattern)
+		}
+	}
+}

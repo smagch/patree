@@ -3,6 +3,7 @@ package patree
 import (
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -20,6 +21,7 @@ func newEntry(pat string) *Entry {
 func newStaticEntry(pat string) *Entry {
 	entry := newEntry(pat)
 	entry.exec = entry.execPrefix
+	entry.weight = 1000 + len(pat)
 	return entry
 }
 
@@ -27,12 +29,14 @@ func newMatchEntry(pat string) *Entry {
 	entry := newEntry(pat)
 	matcher, name := parseMatcher(pat)
 	entry.exec = entry.getExecMatch(name, matcher)
+	entry.weight = 100
 	return entry
 }
 
 func newSuffixMatchEntry(pat, name string, matcher Matcher) *Entry {
 	entry := newEntry(pat)
 	entry.exec = entry.getExecMatch(name, matcher)
+	entry.weight = 100 + len(pat)
 	return entry
 }
 
@@ -43,6 +47,7 @@ type Entry struct {
 	handler  http.Handler
 	entries  []*Entry
 	exec     ExecFunc
+	weight   int
 }
 
 // Len returns a total number of child entries.
@@ -105,11 +110,27 @@ func (e *Entry) MergePatterns(patterns []string) *Entry {
 	return e.addPatterns(patterns)
 }
 
-// AddEntry add new child entry.
-//
-// TODO sort
+// AddEntry add new child entry. Child entries are sorted irrespective of order
+// they are added. Static patterns would be indexed ahead of match patterns.
 func (e *Entry) AddEntry(child *Entry) {
-	e.entries = append(e.entries, child)
+	length := len(e.entries)
+	if length == 0 {
+		e.entries = append(e.entries, child)
+		return
+	}
+
+	index := sort.Search(length, func(i int) bool {
+		return child.weight > e.entries[i].weight
+	})
+
+	if index == length {
+		e.entries = append(e.entries, child)
+		return
+	}
+
+	e.entries = append(e.entries, nil)
+	copy(e.entries[index+1:], e.entries[index:])
+	e.entries[index] = child
 }
 
 // addPatterns adds entry children with the pattern strings.
