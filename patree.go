@@ -44,6 +44,15 @@ func New() *PatternTreeServeMux {
 	}
 }
 
+// NewWithPrefix create a new muxer with the given prefix pattern string.
+func NewWithPrefix(pat string) *PatternTreeServeMux {
+	entry := newStaticEntry(pat)
+	return &PatternTreeServeMux{
+		rootEntry: entry,
+		notfound:  http.NotFoundHandler(),
+	}
+}
+
 // ServeHTTP execute matched handler or execute notfound handler.
 func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h, paramArray := m.rootEntry.exec(r.Method, r.URL.Path)
