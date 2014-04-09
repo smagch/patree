@@ -48,8 +48,9 @@ func TestHexMatcher(t *testing.T) {
 		{"z", -1, ""},
 		{"~f", -1, ""},
 		{"1234", 4, "1234"},
-		{"ffaa00", 6, "ffaa00"},
+		{"fFaa00", 6, "fFaa00"},
 		{"fg", 1, "f"},
+		{"Abcde0", 6, "Abcde0"},
 	}}
 	m.test(t)
 }

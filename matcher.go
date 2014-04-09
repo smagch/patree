@@ -11,7 +11,7 @@ func isDigit(r rune) bool {
 }
 
 func isHex(r rune) bool {
-	return isDigit(r) || ('a' <= r && 'f' >= r)
+	return isDigit(r) || ('a' <= r && 'f' >= r) || ('A' <= r && r <= 'F')
 }
 
 func isNotSlash(r rune) bool {
