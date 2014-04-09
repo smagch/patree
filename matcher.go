@@ -4,6 +4,7 @@ var (
 	IntMatcher     = RuneMatcherFunc(isDigit)
 	HexMatcher     = RuneMatcherFunc(isHex)
 	DefaultMatcher = RuneMatcherFunc(isNotSlash)
+	UUIDMatcher    = &FixedLengthMatcher{36, isHex, hasUUIDPrefix}
 )
 
 func isDigit(r rune) bool {
@@ -16,6 +17,38 @@ func isHex(r rune) bool {
 
 func isNotSlash(r rune) bool {
 	return r != '/'
+}
+
+// UUID's 8, 13, 23, 18 is '-'
+// e.g. 9E242A66-4EA6-4323-AD5C-66A76F4472FE
+func hasUUIDPrefix(s string) bool {
+	if len(s) < 36 {
+		return false
+	}
+	var count int
+	for i, r := range s {
+		// should not be multi byte char
+		if count != i {
+			return false
+		}
+		switch count {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return false
+			}
+		default:
+			if !isHex(r) {
+				return false
+			}
+		}
+		if count == 35 {
+			return true
+		}
+		count += 1
+	}
+
+	// should not run here
+	return false
 }
 
 // Matcher is the interface that processes pattern matching.
@@ -97,4 +130,25 @@ func (m *SuffixMatcher) Match(str string) (offset int, matchStr string) {
 // MatchRune simply calls mather.MatchRune
 func (m *SuffixMatcher) MatchRune(r rune) bool {
 	return m.matcher.MatchRune(r)
+}
+
+// FixedLengthMatcher represents a matcher that has fixed length pattern
+type FixedLengthMatcher struct {
+	length int
+	peek   RuneMatcherFunc
+	match  func(s string) bool
+}
+
+// MatchRune peek the first character.
+func (m *FixedLengthMatcher) MatchRune(r rune) bool {
+	return m.peek(r)
+}
+
+// Match against fixed length pattern.
+func (m *FixedLengthMatcher) Match(s string) (offset int, matchStr string) {
+	if len(s) < m.length || !m.match(s) {
+		offset = -1
+		return
+	}
+	return m.length, s[:m.length]
 }

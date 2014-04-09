@@ -129,3 +129,19 @@ func TestSuffixMatcherWithDefaultMatcher(t *testing.T) {
 		{"", -1, ""},
 	}}
 }
+
+func TestUUIDMatcher(t *testing.T) {
+	m := matcherTest{UUIDMatcher, []matcherTestCase{{
+		"BE567C9C-6392-4F6D-B5AE-E35893F956BB/about", 36,
+		"BE567C9C-6392-4F6D-B5AE-E35893F956BB"}, {
+		"e3a596d5-b7d6-4467-bf3f-d42cdac5f1be0f", 36,
+		"e3a596d5-b7d6-4467-bf3f-d42cdac5f1be"}, {
+		"76160D6E-924C-4A48-9739-AC12E76F176B", 36,
+		"76160D6E-924C-4A48-9739-AC12E76F176B"},
+		// fails
+		{"", -1, ""},
+		{"01754B72-", -1, ""},
+		{"01754B72-ADD4-4ED9-9044-F2253CCBB85I", -1, ""},
+	}}
+	m.test(t)
+}
