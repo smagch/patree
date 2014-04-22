@@ -51,6 +51,12 @@ func TestMuxer(t *testing.T) {
 			params{"bar": "132", "token": "2afe2792458d76a7d9ff"}},
 		{"/foo/bar<hex:token>", "/foo/bar2000f",
 			params{"token": "2000f"}},
+		{"/uuids/<uuid:id>", "/uuids/F2B55C6E-1B8C-4CAB-A58D-9B8DA8C31F20",
+			params{"id": "F2B55C6E-1B8C-4CAB-A58D-9B8DA8C31F20"}},
+		{"/uuids/<uuid:id>abcdef/<uuid:second_id>",
+			"/uuids/513c96ab-b1e6-4e77-ab91-cf7dbe13a460abcdef/7B617843-065E-4F74-864C-B3B577F11D7E",
+			params{"id": "513c96ab-b1e6-4e77-ab91-cf7dbe13a460",
+				"second_id": "7B617843-065E-4F74-864C-B3B577F11D7E"}},
 	}
 
 	execTests(m, cases, t)

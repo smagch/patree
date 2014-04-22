@@ -14,13 +14,15 @@ import (
 var NoClosingBracket = errors.New("Invalid syntax: No closing bracket found")
 
 // MatherMap stores Matchers with matcher pattern type keys. For example,
-// Pattern "<int:id>" will be an IntMatcher.
-// Pattern "<hex:id> will be a HexMatcher.
-// Pattern "<id>" will be a DefaultMatcher.
+// Pattern "<int:id>" is an IntMatcher.
+// Pattern "<hex:id> is a HexMatcher.
+// Pattern "<id>" is a DefaultMatcher.
+// Pattern "<uuid:id>" is a UUIDMatcher
 var MatcherMap = map[string]Matcher{
 	"default": DefaultMatcher,
 	"int":     IntMatcher,
 	"hex":     HexMatcher,
+	"uuid":    UUIDMatcher,
 }
 
 // parseMatcher returns matcher and name from the given pattern string.
@@ -121,6 +123,9 @@ func SplitPath(pat string) (routes []string, err error) {
 func isNextSuffixPattern(p []string) bool {
 	if len(p) >= 2 && isMatchPattern(p[0]) && !isMatchPattern(p[1]) {
 		matcher, _ := parseMatcher(p[0])
+		if _, ok := matcher.(*FixedLengthMatcher); ok {
+			return false
+		}
 		r, _ := utf8.DecodeRuneInString(p[1])
 		return matcher.MatchRune(r)
 	}
