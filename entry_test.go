@@ -6,9 +6,11 @@ import (
 	"testing"
 )
 
-func foobar(w http.ResponseWriter, r *http.Request) {}
+func foobar(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
 
-var foobarHandler = http.HandlerFunc(foobar)
+var foobarHandler = HandlerFunc(foobar)
 var fooValue = reflect.ValueOf(foobarHandler)
 
 func TestStaticEntry(t *testing.T) {

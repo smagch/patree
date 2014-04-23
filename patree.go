@@ -115,7 +115,9 @@ func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		m.errorHandler.ServeHTTP(w, r, err)
 		return
 	}
-	h.ServeHTTP(w, r)
+	if err := h.ServeHTTP(w, r); err != nil {
+		m.errorHandler.ServeHTTP(w, r, err)
+	}
 }
 
 // Use appens a Handler as Middleware
@@ -128,68 +130,78 @@ func (m *PatternTreeServeMux) UseFunc(h HandlerFunc) {
 	m.middleware = append(m.middleware, h)
 }
 
-// HandleFunc add a Handler
-func (m *PatternTreeServeMux) HandleFunc(pat string, h http.HandlerFunc) {
-	m.Handle(pat, h)
-}
-
-// Handle a http.Handler with the given url pattern. panic with duplicate
-// handler registration for a pattern.
-func (m *PatternTreeServeMux) Handle(pat string, h http.Handler) {
+// registerPattern merge pattern with the given handlers
+func (m *PatternTreeServeMux) registerPattern(pat string, h []Handler) (Handler, *Entry) {
 	patterns, err := SplitPath(pat)
 	if err != nil {
 		panic(err)
 	}
+	var handler Handler
+	if len(h) > 1 {
+		handler = Middleware(h)
+	} else {
+		handler = h[0]
+	}
 	leafEntry := m.rootEntry.MergePatterns(patterns)
-	err = leafEntry.SetHandler(h)
-	if err != nil {
+	return handler, leafEntry
+}
+
+// HandleFunc add Handlers with the given pattern.
+func (m *PatternTreeServeMux) HandleFunc(pat string, h ...HandlerFunc) {
+	handlers := make([]Handler, len(h))
+	for i, f := range h {
+		handlers[i] = HandlerFunc(f)
+	}
+	m.Handle(pat, handlers...)
+}
+
+// Handle a http.Handler with the given url pattern. panic with duplicate
+// handler registration for a pattern.
+func (m *PatternTreeServeMux) Handle(pat string, h ...Handler) {
+	handler, leafEntry := m.registerPattern(pat, h)
+	if err := leafEntry.SetHandler(handler); err != nil {
 		panic(err)
 	}
 }
 
 // Handle the handler with the given http method and pattern. Panic with
 // duplicate handler registration.
-func (m *PatternTreeServeMux) HandleMethod(method, pat string, h http.Handler) {
-	patterns, err := SplitPath(pat)
-	if err != nil {
-		panic(err)
-	}
-	leafEntry := m.rootEntry.MergePatterns(patterns)
-	err = leafEntry.SetMethodHandler(method, h)
-	if err != nil {
+func (m *PatternTreeServeMux) HandleMethod(method, pat string, h ...Handler) {
+	handler, leafEntry := m.registerPattern(pat, h)
+	if err := leafEntry.SetMethodHandler(method, handler); err != nil {
 		panic(err)
 	}
 }
 
 // Get registers the handler with the given pattern for "GET" and "HEAD" method.
-func (m *PatternTreeServeMux) Get(pat string, h http.Handler) {
-	m.HandleMethod("GET", pat, h)
-	m.HandleMethod("HEAD", pat, h)
+func (m *PatternTreeServeMux) Get(pat string, h ...Handler) {
+	m.HandleMethod("GET", pat, h...)
+	m.HandleMethod("HEAD", pat, h...)
 }
 
 // Post registers the handler with the given pattern for "POST" method.
-func (m *PatternTreeServeMux) Post(pat string, h http.Handler) {
-	m.HandleMethod("POST", pat, h)
+func (m *PatternTreeServeMux) Post(pat string, h ...Handler) {
+	m.HandleMethod("POST", pat, h...)
 }
 
 // Put registers the handler with the given pattern for "PUT" method.
-func (m *PatternTreeServeMux) Put(pat string, h http.Handler) {
-	m.HandleMethod("PUT", pat, h)
+func (m *PatternTreeServeMux) Put(pat string, h ...Handler) {
+	m.HandleMethod("PUT", pat, h...)
 }
 
 // Patch registers the handler with the given pattern for "PATCH" method.
-func (m *PatternTreeServeMux) Patch(pat string, h http.Handler) {
-	m.HandleMethod("PATCH", pat, h)
+func (m *PatternTreeServeMux) Patch(pat string, h ...Handler) {
+	m.HandleMethod("PATCH", pat, h...)
 }
 
 // Delete registers the handler with the give pattern for "DELETE" method.
-func (m *PatternTreeServeMux) Delete(pat string, h http.Handler) {
-	m.HandleMethod("DELETE", pat, h)
+func (m *PatternTreeServeMux) Delete(pat string, h ...Handler) {
+	m.HandleMethod("DELETE", pat, h...)
 }
 
 // Options registers the handler with the given pattern for "OPTIONS" method.
-func (m *PatternTreeServeMux) Options(pat string, h http.Handler) {
-	m.HandleMethod("OPTIONS", pat, h)
+func (m *PatternTreeServeMux) Options(pat string, h ...Handler) {
+	m.HandleMethod("OPTIONS", pat, h...)
 }
 
 // NotFoundFunc registers fallback HandlerFunc in case no pattern matches.

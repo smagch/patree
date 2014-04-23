@@ -2,19 +2,18 @@ package patree
 
 import (
 	"errors"
-	"net/http"
 	"sort"
 	"strings"
 )
 
 // ExecFunc is pattern match function that returns handler and matched request
 // url parameters.
-type ExecFunc func(method, urlStr string) (http.Handler, []string)
+type ExecFunc func(method, urlStr string) (Handler, []string)
 
 func newEntry(pat string) *Entry {
 	return &Entry{
 		pattern:  pat,
-		handlers: make(map[string]http.Handler),
+		handlers: make(map[string]Handler),
 	}
 }
 
@@ -43,8 +42,8 @@ func newSuffixMatchEntry(pat, name string, matcher Matcher) *Entry {
 // Entry is a pattern node.
 type Entry struct {
 	pattern  string
-	handlers map[string]http.Handler
-	handler  http.Handler
+	handlers map[string]Handler
+	handler  Handler
 	entries  []*Entry
 	exec     ExecFunc
 	weight   int
@@ -56,7 +55,7 @@ func (e *Entry) Len() int {
 }
 
 // SetHandler reigsters the given handler that matches with any method.
-func (e *Entry) SetHandler(h http.Handler) error {
+func (e *Entry) SetHandler(h Handler) error {
 	if e.handler != nil {
 		return errors.New("Duplicate Handler registration")
 	}
@@ -65,7 +64,7 @@ func (e *Entry) SetHandler(h http.Handler) error {
 }
 
 // SetMethodHandler reigsters the given handler for the method.
-func (e *Entry) SetMethodHandler(method string, h http.Handler) error {
+func (e *Entry) SetMethodHandler(method string, h Handler) error {
 	if e.GetHandler(method) != nil {
 		return errors.New("Duplicate Handler registration")
 	}
@@ -74,7 +73,7 @@ func (e *Entry) SetMethodHandler(method string, h http.Handler) error {
 }
 
 // GetHandler returns a handler with given method.
-func (e *Entry) GetHandler(method string) http.Handler {
+func (e *Entry) GetHandler(method string) Handler {
 	handler := e.handlers[method]
 	if handler == nil {
 		handler = e.handler
@@ -159,7 +158,7 @@ func (e *Entry) addPatterns(patterns []string) *Entry {
 }
 
 // execPrefix simply see if the given urlStr has a leading pattern.
-func (e *Entry) execPrefix(method, urlStr string) (http.Handler, []string) {
+func (e *Entry) execPrefix(method, urlStr string) (Handler, []string) {
 	if !strings.HasPrefix(urlStr, e.pattern) {
 		return nil, nil
 	}
@@ -170,7 +169,7 @@ func (e *Entry) execPrefix(method, urlStr string) (http.Handler, []string) {
 }
 
 // traverse tries matches to child entries.
-func (e *Entry) traverse(method, urlStr string) (http.Handler, []string) {
+func (e *Entry) traverse(method, urlStr string) (Handler, []string) {
 	for _, entry := range e.entries {
 		if h, params := entry.exec(method, urlStr); h != nil {
 			return h, params
@@ -181,7 +180,7 @@ func (e *Entry) traverse(method, urlStr string) (http.Handler, []string) {
 
 // getExecMatch returns ExecFunc with the given name and mather.
 func (e *Entry) getExecMatch(name string, matcher Matcher) ExecFunc {
-	return func(method, urlStr string) (http.Handler, []string) {
+	return func(method, urlStr string) (Handler, []string) {
 		offset, matchStr := matcher.Match(urlStr)
 		if offset == -1 {
 			return nil, nil

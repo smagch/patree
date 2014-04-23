@@ -14,8 +14,8 @@ type routeTestCase struct {
 	params  params
 }
 
-func (rtc routeTestCase) getHandler(t *testing.T) http.Handler {
-	h := func(w http.ResponseWriter, r *http.Request) {
+func (rtc routeTestCase) getHandler(t *testing.T) Handler {
+	h := func(w http.ResponseWriter, r *http.Request) error {
 		for k, v := range rtc.params {
 			if p := Param(r, k); p != v {
 				t.Fatalf("pattern %s should have param %s with url \"%s\" "+
@@ -23,8 +23,9 @@ func (rtc routeTestCase) getHandler(t *testing.T) http.Handler {
 					v, rtc.urlStr, k, p)
 			}
 		}
+		return nil
 	}
-	return http.HandlerFunc(h)
+	return HandlerFunc(h)
 }
 
 func execTests(m *PatternTreeServeMux, cases []routeTestCase, t *testing.T) {
@@ -70,17 +71,21 @@ func (c middlewareTestCase) execTests(t *testing.T) {
 	}
 
 	// set a middleware that write to http body
-	f := func(w http.ResponseWriter, r *http.Request) error {
-		io.WriteString(w, c.body)
-		count++
-		return nil
+	handlers := []HandlerFunc{}
+	for _, r := range c.body {
+		s := string(r)
+		f := func(w http.ResponseWriter, r *http.Request) error {
+			io.WriteString(w, s)
+			count++
+			return nil
+		}
+		handlers = append(handlers, f)
+		total++
 	}
-	m.UseFunc(f)
-	total++
 
-	validate := func(w http.ResponseWriter, r *http.Request) {
+	validate := func(w http.ResponseWriter, r *http.Request) error {
 		if count != total {
-			t.Fatal("It should have %d counts rather than %d", total, count)
+			t.Fatalf("It should have %d counts rather than %d", total, count)
 		}
 		for k, v := range c.header {
 			if w.Header().Get(k) != v {
@@ -95,27 +100,34 @@ func (c middlewareTestCase) execTests(t *testing.T) {
 		} else {
 			t.Fatal("ResponseRecorder should be passed")
 		}
+
+		return nil
 	}
 
-	if c.err == nil {
-		m.HandleFunc("/middleware-test", validate)
-	} else {
-		f := func(w http.ResponseWriter, r *http.Request) error {
+	if c.err != nil {
+		fError := func(w http.ResponseWriter, r *http.Request) error {
 			count++
 			return c.err
 		}
-		m.UseFunc(f)
 		total++
-		m.HandleFunc("/middleware-test", func(w http.ResponseWriter, r *http.Request) {
+		f := func(w http.ResponseWriter, r *http.Request) error {
 			t.Fatal("Error Handler should be called instead")
-		})
+			return nil
+		}
+		handlers = append(handlers, fError, f)
 		m.ErrorFunc(func(w http.ResponseWriter, r *http.Request, err error) {
 			if err != c.err {
 				t.Fatalf("Should catch an error %v", err)
 			}
+			count++
 			validate(w, r)
 		})
+		total++
+	} else {
+		handlers = append(handlers, validate)
 	}
+
+	m.HandleFunc("/middleware-test", handlers...)
 
 	r, err := http.NewRequest("GET", "/middleware-test", nil)
 	if err != nil {
@@ -129,6 +141,10 @@ func TestMiddleware(t *testing.T) {
 
 	cases := []middlewareTestCase{
 		{
+			map[string]string{},
+			"H",
+			nil,
+		}, {
 			map[string]string{
 				"X-Test":       "Test-Header",
 				"Content-Type": "text/plain",
