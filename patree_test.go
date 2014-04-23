@@ -1,7 +1,10 @@
 package patree
 
 import (
+	"errors"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -35,6 +38,116 @@ func execTests(m *PatternTreeServeMux, cases []routeTestCase, t *testing.T) {
 			t.Fatal(err)
 		}
 		m.ServeHTTP(nil, r)
+	}
+}
+
+type middlewareTestCase struct {
+	header map[string]string
+	body   string
+	err    error
+}
+
+func (c middlewareTestCase) execTests(t *testing.T) {
+	m := New()
+	m.NotFoundFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("Should not be NotFound: %s", r.URL)
+	})
+
+	var total, count int
+
+	// set middlewares that set a header
+	for k, v := range c.header {
+		f := func(k, v string) HandlerFunc {
+			f := func(w http.ResponseWriter, r *http.Request) error {
+				w.Header().Set(k, v)
+				return nil
+			}
+			count++
+			return f
+		}(k, v)
+		m.UseFunc(f)
+		total++
+	}
+
+	// set a middleware that write to http body
+	f := func(w http.ResponseWriter, r *http.Request) error {
+		io.WriteString(w, c.body)
+		count++
+		return nil
+	}
+	m.UseFunc(f)
+	total++
+
+	validate := func(w http.ResponseWriter, r *http.Request) {
+		if count != total {
+			t.Fatal("It should have %d counts rather than %d", total, count)
+		}
+		for k, v := range c.header {
+			if w.Header().Get(k) != v {
+				t.Fatalf("Header %s should be set on %s", v, k)
+			}
+		}
+
+		if v, ok := w.(*httptest.ResponseRecorder); ok {
+			if body := v.Body.String(); body != c.body {
+				t.Fatal("Inconsistent body response: %s", body)
+			}
+		} else {
+			t.Fatal("ResponseRecorder should be passed")
+		}
+	}
+
+	if c.err == nil {
+		m.HandleFunc("/middleware-test", validate)
+	} else {
+		f := func(w http.ResponseWriter, r *http.Request) error {
+			count++
+			return c.err
+		}
+		m.UseFunc(f)
+		total++
+		m.HandleFunc("/middleware-test", func(w http.ResponseWriter, r *http.Request) {
+			t.Fatal("Error Handler should be called instead")
+		})
+		m.ErrorFunc(func(w http.ResponseWriter, r *http.Request, err error) {
+			if err != c.err {
+				t.Fatalf("Should catch an error %v", err)
+			}
+			validate(w, r)
+		})
+	}
+
+	r, err := http.NewRequest("GET", "/middleware-test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	m.ServeHTTP(w, r)
+}
+
+func TestMiddleware(t *testing.T) {
+
+	cases := []middlewareTestCase{
+		{
+			map[string]string{
+				"X-Test":       "Test-Header",
+				"Content-Type": "text/plain",
+			},
+			"Hello World",
+			nil,
+		}, {
+			map[string]string{
+				"Authorization": "Foobar",
+				"Content-Type":  "application/json",
+				"X-Test-Header": "Testing",
+			},
+			`{"foo": "bar"}`,
+			errors.New("Middleware Error"),
+		},
+	}
+
+	for _, c := range cases {
+		c.execTests(t)
 	}
 }
 

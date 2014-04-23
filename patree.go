@@ -5,6 +5,45 @@ import (
 	"net/http"
 )
 
+// Handler is a http Handler that is able to return an error
+type Handler interface {
+	ServeHTTP(w http.ResponseWriter, r *http.Request) error
+}
+
+// Handler is a handler function that have an error return
+type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
+
+// ServeHTTP calls f(w, r)
+func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
+	return f(w, r)
+}
+
+// ErrorHandler is a http Handler that have an error in the third argument.
+type ErrorHandler interface {
+	ServeHTTP(w http.ResponseWriter, r *http.Request, err error)
+}
+
+// ErrorHandlerFunc
+type ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error)
+
+// ServeHTTP calls f(w, r, err)
+func (f ErrorHandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request, err error) {
+	f(w, r, err)
+}
+
+// Middleware
+type Middleware []Handler
+
+// ServeHTTP implements a patree.Handler interface
+func (m Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
+	for _, h := range m {
+		if err := h.ServeHTTP(w, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // params is a map of matched request parameters. For example, a request with
 // url "/posts/2345" will have "post_id" key and "2345" value with pattern
 // "/posts/<int:post_id>".
@@ -28,10 +67,17 @@ func createParams(p params, paramArray []string) params {
 	return p
 }
 
+// ErrorHandler is the default ErrorHandler
+func HandlerError(w http.ResponseWriter, r *http.Request, err error) {
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+}
+
 // PatternTreeServeMux is an HTTP request multiplexer that does pattern matching.
 type PatternTreeServeMux struct {
-	rootEntry *Entry
-	notfound  http.Handler
+	rootEntry    *Entry
+	middleware   Middleware
+	notfound     http.Handler
+	errorHandler ErrorHandler
 }
 
 // New creates a new muxer
@@ -39,8 +85,9 @@ func New() *PatternTreeServeMux {
 	entry := newStaticEntry("")
 	entry.exec = entry.traverse
 	return &PatternTreeServeMux{
-		rootEntry: entry,
-		notfound:  http.NotFoundHandler(),
+		rootEntry:    entry,
+		notfound:     http.NotFoundHandler(),
+		errorHandler: ErrorHandlerFunc(HandlerError),
 	}
 }
 
@@ -56,14 +103,30 @@ func NewWithPrefix(pat string) *PatternTreeServeMux {
 // ServeHTTP execute matched handler or execute notfound handler.
 func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h, paramArray := m.rootEntry.exec(r.Method, r.URL.Path)
-	if h != nil {
-		p := createParams(contexts[r], paramArray)
-		contexts[r] = p
-		defer delete(contexts, r)
-		h.ServeHTTP(w, r)
-	} else {
+	if h == nil {
 		m.notfound.ServeHTTP(w, r)
+		return
 	}
+
+	p := createParams(contexts[r], paramArray)
+	contexts[r] = p
+	defer delete(contexts, r)
+	if err := m.middleware.ServeHTTP(w, r); err != nil {
+		m.errorHandler.ServeHTTP(w, r, err)
+		return
+	}
+	h.ServeHTTP(w, r)
+}
+
+// Use appens a Handler as Middleware
+func (m *PatternTreeServeMux) Use(h Handler) {
+	m.middleware = append(m.middleware, h)
+}
+
+// UseFunc appends a HandlerFunc as middleware
+func (m *PatternTreeServeMux) UseFunc(h HandlerFunc) {
+	m.middleware = append(m.middleware, h)
+}
 
 // HandleFunc add a Handler
 func (m *PatternTreeServeMux) HandleFunc(pat string, h http.HandlerFunc) {
@@ -131,10 +194,20 @@ func (m *PatternTreeServeMux) Options(pat string, h http.Handler) {
 
 // NotFoundFunc registers fallback HandlerFunc in case no pattern matches.
 func (m *PatternTreeServeMux) NotFoundFunc(f http.HandlerFunc) {
-	m.NotFound(http.HandlerFunc(f))
+	m.NotFound(f)
 }
 
 // NotFound reigsters fallback Handler in case no pattern matches.
 func (m *PatternTreeServeMux) NotFound(h http.Handler) {
 	m.notfound = h
+}
+
+// ErrorFunc registers an error handler function.
+func (m *PatternTreeServeMux) ErrorFunc(h ErrorHandlerFunc) {
+	m.Error(h)
+}
+
+// Error registers an error handler.
+func (m *PatternTreeServeMux) Error(h ErrorHandler) {
+	m.errorHandler = h
 }
