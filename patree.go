@@ -64,6 +64,10 @@ func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	} else {
 		m.notfound.ServeHTTP(w, r)
 	}
+
+// HandleFunc add a Handler
+func (m *PatternTreeServeMux) HandleFunc(pat string, h http.HandlerFunc) {
+	m.Handle(pat, h)
 }
 
 // Handle a http.Handler with the given url pattern. panic with duplicate
