@@ -203,3 +203,64 @@ func TestPrefixMuxer(t *testing.T) {
 
 	execTests(m, cases, t)
 }
+
+func TestMethodMap(t *testing.T) {
+	m := New()
+	m.NotFoundFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("Should not be NotFound: %s", r.URL)
+	})
+	m.ErrorFunc(func(w http.ResponseWriter, r *http.Request, err error) {
+		t.Fatalf("Should not have an error: %s", r.URL, err.Error())
+	})
+
+	var count, total int
+
+	getHandlerFunc := func(pat, method string) HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) error {
+			if r.URL.Path != pat {
+				t.Fatalf("Cought wrong URL path '%s' for route '%s'",
+					r.URL.Path, pat)
+			}
+			count++
+			return nil
+		}
+	}
+
+	getHandler := func(pat, method string) Handler {
+		f := getHandlerFunc(pat, method)
+		return f
+	}
+
+	pattern := "/handler"
+	m.Get(pattern, getHandler(pattern, "GET"))
+	m.Post(pattern, getHandler(pattern, "POST"))
+	m.Put(pattern, getHandler(pattern, "PUT"))
+	m.Patch(pattern, getHandler(pattern, "PATCH"))
+	m.Delete(pattern, getHandler(pattern, "DELETE"))
+	m.Options(pattern, getHandler(pattern, "OPTIONS"))
+
+	pattern = "/handler-func"
+	m.GetFunc(pattern, getHandlerFunc(pattern, "GET"))
+	m.PostFunc(pattern, getHandlerFunc(pattern, "POST"))
+	m.PutFunc(pattern, getHandlerFunc(pattern, "PUT"))
+	m.PatchFunc(pattern, getHandlerFunc(pattern, "PATCH"))
+	m.DeleteFunc(pattern, getHandlerFunc(pattern, "DELETE"))
+	m.OptionsFunc(pattern, getHandlerFunc(pattern, "OPTIONS"))
+
+	methods := []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	patterns := []string{"/handler", "/handler-func"}
+	for _, method := range methods {
+		for _, pat := range patterns {
+			r, err := http.NewRequest(method, pat, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			total++
+			m.ServeHTTP(nil, r)
+		}
+	}
+
+	if total != count {
+		t.Fatal("Missed executing a handler")
+	}
+}
