@@ -29,7 +29,7 @@ func (rtc routeTestCase) getHandler(t *testing.T) Handler {
 }
 
 func execTests(m *PatternTreeServeMux, cases []routeTestCase, t *testing.T) {
-	m.NotFoundFunc(func(w http.ResponseWriter, r *http.Request) {
+	m.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("Should not be NotFound: %s", r.URL)
 	})
 	for _, c := range cases {
@@ -50,7 +50,7 @@ type middlewareTestCase struct {
 
 func (c middlewareTestCase) execTests(t *testing.T) {
 	m := New()
-	m.NotFoundFunc(func(w http.ResponseWriter, r *http.Request) {
+	m.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("Should not be NotFound: %s", r.URL)
 	})
 
@@ -115,7 +115,7 @@ func (c middlewareTestCase) execTests(t *testing.T) {
 			return nil
 		}
 		handlers = append(handlers, fError, f)
-		m.ErrorFunc(func(w http.ResponseWriter, r *http.Request, err error) {
+		m.Error(func(w http.ResponseWriter, r *http.Request, err error) {
 			if err != c.err {
 				t.Fatalf("Should catch an error %v", err)
 			}
@@ -206,10 +206,10 @@ func TestPrefixMuxer(t *testing.T) {
 
 func TestMethodMap(t *testing.T) {
 	m := New()
-	m.NotFoundFunc(func(w http.ResponseWriter, r *http.Request) {
+	m.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("Should not be NotFound: %s", r.URL)
 	})
-	m.ErrorFunc(func(w http.ResponseWriter, r *http.Request, err error) {
+	m.Error(func(w http.ResponseWriter, r *http.Request, err error) {
 		t.Fatalf("Should not have an error: %s", r.URL, err.Error())
 	})
 
@@ -232,20 +232,20 @@ func TestMethodMap(t *testing.T) {
 	}
 
 	pattern := "/handler"
-	m.Get(pattern, getHandler(pattern, "GET"))
-	m.Post(pattern, getHandler(pattern, "POST"))
-	m.Put(pattern, getHandler(pattern, "PUT"))
-	m.Patch(pattern, getHandler(pattern, "PATCH"))
-	m.Delete(pattern, getHandler(pattern, "DELETE"))
-	m.Options(pattern, getHandler(pattern, "OPTIONS"))
+	m.GetHandler(pattern, getHandler(pattern, "GET"))
+	m.PostHandler(pattern, getHandler(pattern, "POST"))
+	m.PutHandler(pattern, getHandler(pattern, "PUT"))
+	m.PatchHandler(pattern, getHandler(pattern, "PATCH"))
+	m.DeleteHandler(pattern, getHandler(pattern, "DELETE"))
+	m.OptionsHandler(pattern, getHandler(pattern, "OPTIONS"))
 
 	pattern = "/handler-func"
-	m.GetFunc(pattern, getHandlerFunc(pattern, "GET"))
-	m.PostFunc(pattern, getHandlerFunc(pattern, "POST"))
-	m.PutFunc(pattern, getHandlerFunc(pattern, "PUT"))
-	m.PatchFunc(pattern, getHandlerFunc(pattern, "PATCH"))
-	m.DeleteFunc(pattern, getHandlerFunc(pattern, "DELETE"))
-	m.OptionsFunc(pattern, getHandlerFunc(pattern, "OPTIONS"))
+	m.Get(pattern, getHandlerFunc(pattern, "GET"))
+	m.Post(pattern, getHandlerFunc(pattern, "POST"))
+	m.Put(pattern, getHandlerFunc(pattern, "PUT"))
+	m.Patch(pattern, getHandlerFunc(pattern, "PATCH"))
+	m.Delete(pattern, getHandlerFunc(pattern, "DELETE"))
+	m.Options(pattern, getHandlerFunc(pattern, "OPTIONS"))
 
 	methods := []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	patterns := []string{"/handler", "/handler-func"}

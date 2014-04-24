@@ -179,96 +179,101 @@ func (m *PatternTreeServeMux) HandleMethod(method, pat string, h ...Handler) {
 	}
 }
 
-// GetFunc registers the patree.HandlerFunc functions with the given pattern for
+// Get registers the patree.HandlerFunc functions with the given pattern for
 // "GET" and "HEAD" method.
-func (m *PatternTreeServeMux) GetFunc(pat string, h ...HandlerFunc) {
+func (m *PatternTreeServeMux) Get(pat string, h ...HandlerFunc) {
 	handlers := convertHandlerFuncs(h)
-	m.Get(pat, handlers...)
+	m.GetHandler(pat, handlers...)
 }
 
-// PostFunc registers the patree.HandlerFunc functions with the given pattern
+// Post registers the patree.HandlerFunc functions with the given pattern
 // for "POST" method.
-func (m *PatternTreeServeMux) PostFunc(pat string, h ...HandlerFunc) {
+func (m *PatternTreeServeMux) Post(pat string, h ...HandlerFunc) {
 	handlers := convertHandlerFuncs(h)
-	m.Post(pat, handlers...)
+	m.PostHandler(pat, handlers...)
 }
 
-// PutFunc registers the patree.HandlerFunc functions with the given pattern for
+// Put registers the patree.HandlerFunc functions with the given pattern for
 // "PUT" method.
-func (m *PatternTreeServeMux) PutFunc(pat string, h ...HandlerFunc) {
+func (m *PatternTreeServeMux) Put(pat string, h ...HandlerFunc) {
 	handlers := convertHandlerFuncs(h)
-	m.Put(pat, handlers...)
+	m.PutHandler(pat, handlers...)
 }
 
-// PatchFunc registers the patree.HandlerFunc functions with the given pattern
+// Patch registers the patree.HandlerFunc functions with the given pattern
 // for "PATCH" method.
-func (m *PatternTreeServeMux) PatchFunc(pat string, h ...HandlerFunc) {
+func (m *PatternTreeServeMux) Patch(pat string, h ...HandlerFunc) {
 	handlers := convertHandlerFuncs(h)
-	m.Patch(pat, handlers...)
+	m.PatchHandler(pat, handlers...)
 }
 
-// DeleteFunc registers the patree.HandlerFunc functions with the given pattern
+// Delete registers the patree.HandlerFunc functions with the given pattern
 // for "DELETE" method.
-func (m *PatternTreeServeMux) DeleteFunc(pat string, h ...HandlerFunc) {
+func (m *PatternTreeServeMux) Delete(pat string, h ...HandlerFunc) {
 	handlers := convertHandlerFuncs(h)
-	m.Delete(pat, handlers...)
+	m.DeleteHandler(pat, handlers...)
 }
 
-// OptionsFunc registers the patree.HandlerFunc functions with the given pattern
+// Options registers the patree.HandlerFunc functions with the given pattern
 // for "OPTIONS" method.
-func (m *PatternTreeServeMux) OptionsFunc(pat string, h ...HandlerFunc) {
+func (m *PatternTreeServeMux) Options(pat string, h ...HandlerFunc) {
 	handlers := convertHandlerFuncs(h)
-	m.Options(pat, handlers...)
+	m.OptionsHandler(pat, handlers...)
 }
 
-// Get registers the patree.Handler with the given pattern for "GET" and "HEAD"
-// method.
-func (m *PatternTreeServeMux) Get(pat string, h ...Handler) {
+// GetHandler registers the patree.Handler with the given pattern for "GET" and
+// "HEAD" method.
+func (m *PatternTreeServeMux) GetHandler(pat string, h ...Handler) {
 	m.HandleMethod("GET", pat, h...)
 	m.HandleMethod("HEAD", pat, h...)
 }
 
-// Post registers the patree.Handler with the given pattern for "POST" method.
-func (m *PatternTreeServeMux) Post(pat string, h ...Handler) {
+// PostHandler registers the patree.Handler with the given pattern for "POST"
+// method.
+func (m *PatternTreeServeMux) PostHandler(pat string, h ...Handler) {
 	m.HandleMethod("POST", pat, h...)
 }
 
-// Put registers the patree.Handler with the given pattern for "PUT" method.
-func (m *PatternTreeServeMux) Put(pat string, h ...Handler) {
+// PutHandler registers the patree.Handler with the given pattern for "PUT"
+// method.
+func (m *PatternTreeServeMux) PutHandler(pat string, h ...Handler) {
 	m.HandleMethod("PUT", pat, h...)
 }
 
-// Patch registers the patree.Handler with the given pattern for "PATCH" method.
-func (m *PatternTreeServeMux) Patch(pat string, h ...Handler) {
+// PatchHandler registers the patree.Handler with the given pattern for "PATCH"
+// method.
+func (m *PatternTreeServeMux) PatchHandler(pat string, h ...Handler) {
 	m.HandleMethod("PATCH", pat, h...)
 }
 
-// Delete registers the patree.Handler with the give pattern for "DELETE" method.
-func (m *PatternTreeServeMux) Delete(pat string, h ...Handler) {
+// DeleteHandler registers the patree.Handler with the give pattern for "DELETE"
+// method.
+func (m *PatternTreeServeMux) DeleteHandler(pat string, h ...Handler) {
 	m.HandleMethod("DELETE", pat, h...)
 }
 
-// Options registers the patree.Handler with the given pattern for "OPTIONS" method.
-func (m *PatternTreeServeMux) Options(pat string, h ...Handler) {
+// OptionsHandler registers the patree.Handler with the given pattern for
+// "OPTIONS" method.
+func (m *PatternTreeServeMux) OptionsHandler(pat string, h ...Handler) {
 	m.HandleMethod("OPTIONS", pat, h...)
 }
 
-// NotFoundFunc registers fallback HandlerFunc in case no pattern matches.
-func (m *PatternTreeServeMux) NotFoundFunc(f http.HandlerFunc) {
-	m.NotFound(f)
+// NotFound registers fallback HandlerFunc in case no pattern matches.
+func (m *PatternTreeServeMux) NotFound(f http.HandlerFunc) {
+	m.NotFoundHandler(f)
 }
 
-// NotFound reigsters fallback Handler in case no pattern matches.
-func (m *PatternTreeServeMux) NotFound(h http.Handler) {
+// NotFoundHandler reigsters fallback Handler in case no pattern matches.
+func (m *PatternTreeServeMux) NotFoundHandler(h http.Handler) {
 	m.notfound = h
 }
 
-// ErrorFunc registers an error handler function.
-func (m *PatternTreeServeMux) ErrorFunc(h ErrorHandlerFunc) {
-	m.Error(h)
+// Error registers an error handler function.
+func (m *PatternTreeServeMux) Error(h ErrorHandlerFunc) {
+	m.ErrorHandler(h)
 }
 
-// Error registers an error handler.
-func (m *PatternTreeServeMux) Error(h ErrorHandler) {
+// ErrorHandler registers an error handler.
+func (m *PatternTreeServeMux) ErrorHandler(h ErrorHandler) {
 	m.errorHandler = h
 }
