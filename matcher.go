@@ -5,6 +5,7 @@ var (
 	HexMatcher     = RuneMatcherFunc(isHex)
 	DefaultMatcher = RuneMatcherFunc(isNotSlash)
 	UUIDMatcher    = &FixedLengthMatcher{36, isHex, hasUUIDPrefix}
+	DateMatcher    = &FixedLengthMatcher{10, isDigit, hasDatePrefix} // YYYY-MM-DD
 )
 
 func isDigit(r rune) bool {
@@ -49,6 +50,63 @@ func hasUUIDPrefix(s string) bool {
 
 	// should not run here
 	return false
+}
+
+// date formant YYYY-MM-DD
+// mininum date 0000-01-01
+// maximum date 9999-12-31
+func hasDatePrefix(s string) bool {
+	if len(s) < 10 {
+		return false
+	}
+	var count int
+	for i, r := range s {
+		if count != i {
+			return false
+		}
+		switch i {
+		case 4, 7:
+			if r != '-' {
+				return false
+			}
+		default:
+			if !isDigit(r) {
+				return false
+			}
+		}
+		if i == 9 {
+			// month
+			if s[5] == '1' {
+				if s[6] > '2' {
+					return false
+				}
+			} else if s[5] == '0' {
+				if s[6] == '0' {
+					return false
+				}
+			} else {
+				return false
+			}
+
+			// day
+			if s[8] == '0' {
+				if s[9] == '0' {
+					return false
+				}
+			} else if s[8] == '3' {
+				if s[9] > '1' {
+					return false
+				}
+			} else if s[8] != '1' && s[8] != '2' {
+				return false
+			}
+
+			return true
+		}
+		count += 1
+	}
+
+	return true
 }
 
 // Matcher is the interface that processes pattern matching.
