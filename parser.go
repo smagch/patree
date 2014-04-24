@@ -23,6 +23,7 @@ var MatcherMap = map[string]Matcher{
 	"int":     IntMatcher,
 	"hex":     HexMatcher,
 	"uuid":    UUIDMatcher,
+	"date":    DateMatcher,
 }
 
 // parseMatcher returns matcher and name from the given pattern string.

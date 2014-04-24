@@ -186,6 +186,11 @@ func TestMuxer(t *testing.T) {
 			"/uuids/513c96ab-b1e6-4e77-ab91-cf7dbe13a460abcdef/7B617843-065E-4F74-864C-B3B577F11D7E",
 			params{"id": "513c96ab-b1e6-4e77-ab91-cf7dbe13a460",
 				"second_id": "7B617843-065E-4F74-864C-B3B577F11D7E"}},
+		{"/during/<date:date_start>/<date:date_end>",
+			"/during/2014-01-01/2014-12-31",
+			params{"date_start": "2014-01-01", "date_end": "2014-12-31"}},
+		{"/date-<date:date>", "/date-2050-10-09", params{"date": "2050-10-09"}},
+		{"<date:d>", "0010-05-30", params{"d": "0010-05-30"}},
 	}
 
 	execTests(m, cases, t)
