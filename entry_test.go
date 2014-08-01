@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-func foobar(w http.ResponseWriter, r *http.Request) error {
-	return nil
+func foobar(w http.ResponseWriter, r *http.Request, c *Context) {
+
 }
 
-var foobarHandler = HandlerFunc(foobar)
+var foobarHandler = &Route{f: HandlerFunc(foobar)}
 var fooValue = reflect.ValueOf(foobarHandler)
 
 func TestStaticEntry(t *testing.T) {

@@ -8,39 +8,7 @@ import (
 	"testing"
 )
 
-type routeTestCase struct {
-	pattern string
-	urlStr  string
-	params  params
-}
-
-func (rtc routeTestCase) getHandler(t *testing.T) Handler {
-	h := func(w http.ResponseWriter, r *http.Request) error {
-		for k, v := range rtc.params {
-			if p := Param(r, k); p != v {
-				t.Fatalf("pattern %s should have param %s with url \"%s\" "+
-					"when key is \"%s\". But got %s instead.", rtc.pattern,
-					v, rtc.urlStr, k, p)
-			}
-		}
-		return nil
-	}
-	return HandlerFunc(h)
-}
-
-func execTests(m *PatternTreeServeMux, cases []routeTestCase, t *testing.T) {
-	m.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("Should not be NotFound: %s", r.URL)
-	})
-	for _, c := range cases {
-		m.Handle(c.pattern, c.getHandler(t))
-		r, err := http.NewRequest("GET", c.urlStr, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		m.ServeHTTP(nil, r)
-	}
-}
+type params map[string]string
 
 type middlewareTestCase struct {
 	header map[string]string
@@ -48,97 +16,83 @@ type middlewareTestCase struct {
 	err    error
 }
 
-func (c middlewareTestCase) execTests(t *testing.T) {
-	m := New()
-	m.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("Should not be NotFound: %s", r.URL)
+func (tc middlewareTestCase) execTests(t *testing.T) {
+	count := 0
+	mux := &Route{}
+
+	Use := func(f HandlerFunc) {
+		mux.Use(func(w http.ResponseWriter, r *http.Request, c *Context) {
+			count--
+			f(w, r, c)
+		})
+		count++
+	}
+
+	Use(func(w http.ResponseWriter, r *http.Request, c *Context) {
+		c.Next(w, r)
+		if c.Err != tc.err {
+			t.Fatalf("Inconsistent error: %s: %s", tc.err.Error(), c.Err.Error())
+		}
+		if c.NotFound() {
+			t.Fatalf("Should not be NotFound: %s", r.URL)
+		}
 	})
 
-	var total, count int
-
 	// set middlewares that set a header
-	for k, v := range c.header {
-		f := func(k, v string) HandlerFunc {
-			f := func(w http.ResponseWriter, r *http.Request) error {
-				w.Header().Set(k, v)
-				return nil
-			}
-			count++
-			return f
-		}(k, v)
-		m.UseFunc(f)
-		total++
+	for k, v := range tc.header {
+		key, val := k, v
+		Use(func(w http.ResponseWriter, r *http.Request, c *Context) {
+			w.Header().Set(key, val)
+			c.Next(w, r)
+		})
 	}
 
 	// set a middleware that write to http body
-	handlers := []HandlerFunc{}
-	for _, r := range c.body {
+	for _, r := range tc.body {
 		s := string(r)
-		f := func(w http.ResponseWriter, r *http.Request) error {
+		Use(func(w http.ResponseWriter, r *http.Request, c *Context) {
 			io.WriteString(w, s)
-			count++
-			return nil
-		}
-		handlers = append(handlers, f)
-		total++
+			c.Next(w, r)
+		})
 	}
 
-	validate := func(w http.ResponseWriter, r *http.Request) error {
-		if count != total {
-			t.Fatalf("It should have %d counts rather than %d", total, count)
+	Use(func(w http.ResponseWriter, r *http.Request, c *Context) {
+		if count != 0 {
+			t.Fatalf("It should have 0 counts rather than %d", count)
 		}
-		for k, v := range c.header {
+		for k, v := range tc.header {
 			if w.Header().Get(k) != v {
 				t.Fatalf("Header %s should be set on %s", v, k)
 			}
 		}
 
 		if v, ok := w.(*httptest.ResponseRecorder); ok {
-			if body := v.Body.String(); body != c.body {
+			if body := v.Body.String(); body != tc.body {
 				t.Fatal("Inconsistent body response: %s", body)
 			}
 		} else {
 			t.Fatal("ResponseRecorder should be passed")
 		}
 
-		return nil
-	}
-
-	if c.err != nil {
-		fError := func(w http.ResponseWriter, r *http.Request) error {
-			count++
-			return c.err
+		if tc.err != nil {
+			c.Err = tc.err
 		}
-		total++
-		f := func(w http.ResponseWriter, r *http.Request) error {
-			t.Fatal("Error Handler should be called instead")
-			return nil
-		}
-		handlers = append(handlers, fError, f)
-		m.Error(func(w http.ResponseWriter, r *http.Request, err error) {
-			if err != c.err {
-				t.Fatalf("Should catch an error %v", err)
-			}
-			count++
-			validate(w, r)
-		})
-		total++
-	} else {
-		handlers = append(handlers, validate)
-	}
+	})
 
-	m.HandleFunc("/middleware-test", handlers...)
+	mux.Use(func(w http.ResponseWriter, r *http.Request, c *Context) {
+		t.Fatal("It shouldn't be called because the above middleare dosn't call",
+			" c.Next(w, r)")
+	})
 
 	r, err := http.NewRequest("GET", "/middleware-test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	w := httptest.NewRecorder()
-	m.ServeHTTP(w, r)
+	mux.ServeHTTP(w, r)
 }
 
 func TestMiddleware(t *testing.T) {
-
 	cases := []middlewareTestCase{
 		{
 			map[string]string{},
@@ -167,8 +121,47 @@ func TestMiddleware(t *testing.T) {
 	}
 }
 
+type routeTestCase struct {
+	pattern string
+	urlStr  string
+	params  params
+}
+
+func (rtc routeTestCase) getHandler(t *testing.T) HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request, c *Context) {
+		for k, v := range rtc.params {
+			if p := c.Params[k]; p != v {
+				t.Fatalf("pattern %s should have param %s with url \"%s\" "+
+					"when key is \"%s\". But got %s instead.", rtc.pattern,
+					v, rtc.urlStr, k, p)
+			}
+		}
+	}
+}
+
+func execTests(mux *Route, cases []routeTestCase, t *testing.T) {
+	mux.Use(func(w http.ResponseWriter, r *http.Request, c *Context) {
+		c.Next(w, r)
+		if c.NotFound() {
+			t.Fatalf("Should not be NotFound: %s", r.URL)
+		}
+	})
+
+	for _, tc := range cases {
+		mux.Handle(tc.pattern, tc.getHandler(t))
+	}
+
+	for _, tc := range cases {
+		r, err := http.NewRequest("GET", tc.urlStr, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mux.ServeHTTP(nil, r)
+	}
+}
+
 func TestMuxer(t *testing.T) {
-	m := New()
+	m := &Route{}
 
 	cases := []routeTestCase{
 		{"/foo/<int:bar>", "/foo/2000", params{"bar": "2000"}},
@@ -196,76 +189,55 @@ func TestMuxer(t *testing.T) {
 	execTests(m, cases, t)
 }
 
-func TestPrefixMuxer(t *testing.T) {
-	m := NewWithPrefix("/api/1")
-
-	cases := []routeTestCase{
-		{"/posts/<int:id>", "/api/1/posts/1003", params{"id": "1003"}},
-		{"/posts", "/api/1/posts", nil},
-		{"/<int:id>/comments/<hex:comment_id>", "/api/1/10/comments/0f3d51",
-			params{"id": "10", "comment_id": "0f3d51"}},
-	}
-
-	execTests(m, cases, t)
-}
-
 func TestMethodMap(t *testing.T) {
-	m := New()
-	m.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("Should not be NotFound: %s", r.URL)
-	})
-	m.Error(func(w http.ResponseWriter, r *http.Request, err error) {
-		t.Fatalf("Should not have an error: %s", r.URL, err.Error())
+	mux := &Route{}
+	mux.Use(func(w http.ResponseWriter, r *http.Request, c *Context) {
+		c.Next(w, r)
+		if c.NotFound() {
+			t.Fatalf("Should not be NotFound: %s", r.URL)
+		}
+		if c.Err != nil {
+			t.Fatalf("Got error on %s.\n%s\n", r.URL, c.Err.Error())
+		}
 	})
 
-	var count, total int
+	count := 0
 
 	getHandlerFunc := func(pat, method string) HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) error {
+		count++
+		return func(w http.ResponseWriter, r *http.Request, c *Context) {
 			if r.URL.Path != pat {
 				t.Fatalf("Cought wrong URL path '%s' for route '%s'",
 					r.URL.Path, pat)
 			}
-			count++
-			return nil
+			count--
 		}
 	}
 
-	getHandler := func(pat, method string) Handler {
-		f := getHandlerFunc(pat, method)
-		return f
+	patterns := []string{"/handler", "/handler2", "/handler/handler2",
+		"/api/1/users", "/api/1/posts", "/api/2/users", "/api/2/posts"}
+
+	for _, pat := range patterns {
+		mux.Get(pat, getHandlerFunc(pat, "GET"))
+		mux.Post(pat, getHandlerFunc(pat, "POST"))
+		mux.Put(pat, getHandlerFunc(pat, "PUT"))
+		mux.Patch(pat, getHandlerFunc(pat, "PATCH"))
+		mux.Delete(pat, getHandlerFunc(pat, "DELETE"))
+		mux.Options(pat, getHandlerFunc(pat, "OPTIONS"))
 	}
 
-	pattern := "/handler"
-	m.GetHandler(pattern, getHandler(pattern, "GET"))
-	m.PostHandler(pattern, getHandler(pattern, "POST"))
-	m.PutHandler(pattern, getHandler(pattern, "PUT"))
-	m.PatchHandler(pattern, getHandler(pattern, "PATCH"))
-	m.DeleteHandler(pattern, getHandler(pattern, "DELETE"))
-	m.OptionsHandler(pattern, getHandler(pattern, "OPTIONS"))
-
-	pattern = "/handler-func"
-	m.Get(pattern, getHandlerFunc(pattern, "GET"))
-	m.Post(pattern, getHandlerFunc(pattern, "POST"))
-	m.Put(pattern, getHandlerFunc(pattern, "PUT"))
-	m.Patch(pattern, getHandlerFunc(pattern, "PATCH"))
-	m.Delete(pattern, getHandlerFunc(pattern, "DELETE"))
-	m.Options(pattern, getHandlerFunc(pattern, "OPTIONS"))
-
 	methods := []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	patterns := []string{"/handler", "/handler-func"}
-	for _, method := range methods {
-		for _, pat := range patterns {
+	for _, pat := range patterns {
+		for _, method := range methods {
 			r, err := http.NewRequest(method, pat, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			total++
-			m.ServeHTTP(nil, r)
+			mux.ServeHTTP(nil, r)
 		}
 	}
 
-	if total != count {
-		t.Fatal("Missed executing a handler")
+	if count != 0 {
+		t.Fatal("Missed executing a handler. Count should be 0 instead of", count)
 	}
 }

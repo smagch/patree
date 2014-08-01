@@ -8,12 +8,12 @@ import (
 
 // ExecFunc is pattern match function that returns handler and matched request
 // url parameters.
-type ExecFunc func(method, urlStr string) (Handler, []string)
+type ExecFunc func(method, urlStr string) (*Route, []string)
 
 func newEntry(pat string) *Entry {
 	return &Entry{
 		pattern:  pat,
-		handlers: make(map[string]Handler),
+		handlers: make(map[string]*Route),
 	}
 }
 
@@ -42,8 +42,8 @@ func newSuffixMatchEntry(pat, name string, matcher Matcher) *Entry {
 // Entry is a pattern node.
 type Entry struct {
 	pattern  string
-	handlers map[string]Handler
-	handler  Handler
+	handlers map[string]*Route
+	handler  *Route
 	entries  []*Entry
 	exec     ExecFunc
 	weight   int
@@ -55,25 +55,25 @@ func (e *Entry) Len() int {
 }
 
 // SetHandler reigsters the given handler that matches with any method.
-func (e *Entry) SetHandler(h Handler) error {
+func (e *Entry) SetHandler(h *Route) error {
 	if e.handler != nil {
-		return errors.New("Duplicate Handler registration")
+		return errors.New("Duplicate Route registration")
 	}
 	e.handler = h
 	return nil
 }
 
 // SetMethodHandler reigsters the given handler for the method.
-func (e *Entry) SetMethodHandler(method string, h Handler) error {
+func (e *Entry) SetMethodHandler(method string, h *Route) error {
 	if e.GetHandler(method) != nil {
-		return errors.New("Duplicate Handler registration")
+		return errors.New("Duplicate Route registration")
 	}
 	e.handlers[method] = h
 	return nil
 }
 
 // GetHandler returns a handler with given method.
-func (e *Entry) GetHandler(method string) Handler {
+func (e *Entry) GetHandler(method string) *Route {
 	handler := e.handlers[method]
 	if handler == nil {
 		handler = e.handler
@@ -135,6 +135,7 @@ func (e *Entry) AddEntry(child *Entry) {
 // addPatterns adds entry children with the pattern strings.
 func (e *Entry) addPatterns(patterns []string) *Entry {
 	var currentNode *Entry = e
+
 	for len(patterns) > 0 {
 		var entry *Entry
 		pat, size := PeekNextPattern(patterns)
@@ -154,11 +155,12 @@ func (e *Entry) addPatterns(patterns []string) *Entry {
 		currentNode = entry
 		patterns = patterns[size:]
 	}
+
 	return currentNode
 }
 
 // execPrefix simply see if the given urlStr has a leading pattern.
-func (e *Entry) execPrefix(method, urlStr string) (Handler, []string) {
+func (e *Entry) execPrefix(method, urlStr string) (*Route, []string) {
 	if !strings.HasPrefix(urlStr, e.pattern) {
 		return nil, nil
 	}
@@ -169,7 +171,7 @@ func (e *Entry) execPrefix(method, urlStr string) (Handler, []string) {
 }
 
 // traverse tries matches to child entries.
-func (e *Entry) traverse(method, urlStr string) (Handler, []string) {
+func (e *Entry) traverse(method, urlStr string) (*Route, []string) {
 	for _, entry := range e.entries {
 		if h, params := entry.exec(method, urlStr); h != nil {
 			return h, params
@@ -180,7 +182,7 @@ func (e *Entry) traverse(method, urlStr string) (Handler, []string) {
 
 // getExecMatch returns ExecFunc with the given name and mather.
 func (e *Entry) getExecMatch(name string, matcher Matcher) ExecFunc {
-	return func(method, urlStr string) (Handler, []string) {
+	return func(method, urlStr string) (*Route, []string) {
 		offset, matchStr := matcher.Match(urlStr)
 		if offset == -1 {
 			return nil, nil

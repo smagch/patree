@@ -5,275 +5,210 @@ import (
 	"net/http"
 )
 
-// Handler is a http Handler that is able to return an error
+// Handler is a http Handler with context
 type Handler interface {
-	ServeHTTP(w http.ResponseWriter, r *http.Request) error
+	ServeHTTPContext(w http.ResponseWriter, r *http.Request, c *Context)
 }
 
-// Handler is a handler function that have an error return
-type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
+// The HandlerFunc type is an adapter to allow the use of ordinary functions as
+// patree handlers.
+type HandlerFunc func(http.ResponseWriter, *http.Request, *Context)
 
-// ServeHTTP calls f(w, r)
-func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
-	return f(w, r)
+// ServeHTTPContext calls f(w, r, c)
+func (f HandlerFunc) ServeHTTPContext(w http.ResponseWriter, r *http.Request, c *Context) {
+	f(w, r, c)
 }
 
-// ErrorHandler is a http Handler that have an error in the third argument.
-type ErrorHandler interface {
-	ServeHTTP(w http.ResponseWriter, r *http.Request, err error)
+// Context represents a context of http request.
+type Context struct {
+	route  *Route
+	Params map[string]string
+	Err    error
+	holdUp bool
 }
 
-// ErrorHandlerFunc
-type ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error)
-
-// ServeHTTP calls f(w, r, err)
-func (f ErrorHandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request, err error) {
-	f(w, r, err)
-}
-
-// Middleware
-type Middleware []Handler
-
-// ServeHTTP implements a patree.Handler interface
-func (m Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
-	for _, h := range m {
-		if err := h.ServeHTTP(w, r); err != nil {
-			return err
-		}
+// Next invoke next route with the given ResponseWriter and Request
+func (c *Context) Next(w http.ResponseWriter, r *http.Request) {
+	if c.route == nil {
+		return
 	}
-	return nil
-}
 
-// params is a map of matched request parameters. For example, a request with
-// url "/posts/2345" will have "post_id" key and "2345" value with pattern
-// "/posts/<int:post_id>".
-type params map[string]string
-
-// contexts stores params for http requests.
-var contexts = make(map[*http.Request]params)
-
-// Param returns a mathced request parameter with the given key.
-func Param(r *http.Request, key string) string {
-	return contexts[r][key]
-}
-
-func createParams(p params, paramArray []string) params {
-	if p == nil {
-		p = make(params)
+	if next := c.route.next; next != nil {
+		c.route = next
+		next.ServeHTTPContext(w, r, c)
+	} else {
+		c.holdUp = true
 	}
+}
+
+// Notfound returns a boolean if the context is consumed all routes.
+func (c *Context) NotFound() bool {
+	return c.holdUp
+}
+
+type patternRouter struct {
+	entry *Entry
+}
+
+func newRouter() *patternRouter {
+	entry := newStaticEntry("")
+	entry.exec = entry.traverse
+	return &patternRouter{entry}
+}
+
+func (p *patternRouter) ServeHTTPContext(w http.ResponseWriter, r *http.Request, c *Context) {
+	route, paramArray := p.entry.exec(r.Method, r.URL.Path)
+	if route == nil {
+		c.Next(w, r)
+		return
+	}
+
+	// TODO hold old maps
+	c.Params = createParams(paramArray)
+
+	current := c.route
+	c.route = route
+	route.ServeHTTPContext(w, r, c)
+	c.route = current
+
+	if c.holdUp {
+		c.holdUp = false
+		c.Next(w, r)
+	}
+}
+
+func (p *patternRouter) registerPattern(pat string) *Entry {
+	patterns, err := SplitPath(pat)
+	if err != nil {
+		panic(err)
+	}
+	return p.entry.MergePatterns(patterns)
+}
+
+// Route is a chainable handler
+type Route struct {
+	f    Handler
+	next *Route
+}
+
+// ServeHTTP implement http.Handler interface
+func (route *Route) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	c := &Context{route: route}
+	route.ServeHTTPContext(w, r, c)
+}
+
+// ServeHTTPContext implements Handler interface
+func (route *Route) ServeHTTPContext(w http.ResponseWriter, r *http.Request, c *Context) {
+	route.f.ServeHTTPContext(w, r, c)
+}
+
+// Use appends a HandlerFunc to the route.
+func (r *Route) Use(f HandlerFunc) {
+	r.UseHandler(f)
+}
+
+// UseHandler appends a Handler to the route.
+func (r *Route) UseHandler(h Handler) {
+	if r.f == nil {
+		r.f = h
+		return
+	}
+
+	route := r.getLeaf()
+	route.next = &Route{f: h}
+}
+
+func (r *Route) getLeaf() *Route {
+	if r.f == nil {
+		return r
+	}
+	route := r
+	for route.next != nil {
+		route = route.next
+	}
+	return route
+}
+
+func (r *Route) addPattern(pat string) *Entry {
+	var p *patternRouter
+	var isRouter bool
+	route := r.getLeaf()
+
+	if route.f != nil {
+		p, isRouter = route.f.(*patternRouter)
+	}
+
+	if !isRouter {
+		p = newRouter()
+		defer r.UseHandler(p)
+	}
+
+	entry := p.registerPattern(pat)
+	return entry
+}
+
+// HandleMethod registers handler funcs with the given pattern and method.
+func (r *Route) HandleMethod(pat, method string, f ...HandlerFunc) {
+	entry := r.addPattern(pat)
+	batch := batchRoute(f)
+	if err := entry.SetMethodHandler(method, batch); err != nil {
+		panic(err)
+	}
+}
+
+// Handle registers handler funcs with the given pattern.
+func (r *Route) Handle(pat string, f ...HandlerFunc) {
+	entry := r.addPattern(pat)
+	batch := batchRoute(f)
+	if err := entry.SetHandler(batch); err != nil {
+		panic(err)
+	}
+}
+
+// Get registers handlers with the given pattern for GET and HEAD method
+func (r *Route) Get(pat string, f ...HandlerFunc) {
+	r.HandleMethod(pat, "GET", f...)
+	r.HandleMethod(pat, "HEAD", f...)
+}
+
+// Post registers handlers with the given pattern for POST method
+func (r *Route) Post(pat string, f ...HandlerFunc) {
+	r.HandleMethod(pat, "POST", f...)
+}
+
+// Put registers handlers with the given pattern for PUT method
+func (r *Route) Put(pat string, f ...HandlerFunc) {
+	r.HandleMethod(pat, "PUT", f...)
+}
+
+// Patch registers handlers with the given pattern for PATCH method
+func (r *Route) Patch(pat string, f ...HandlerFunc) {
+	r.HandleMethod(pat, "PATCH", f...)
+}
+
+// Delete registers handlers with the given pattern for DELETE method
+func (r *Route) Delete(pat string, f ...HandlerFunc) {
+	r.HandleMethod(pat, "DELETE", f...)
+}
+
+// Options registers handlers with the given pattern for OPTIONS method
+func (r *Route) Options(pat string, f ...HandlerFunc) {
+	r.HandleMethod(pat, "OPTIONS", f...)
+}
+
+// TODO refactor Entry and drop this
+func createParams(paramArray []string) map[string]string {
+	p := make(map[string]string)
 	for i := len(paramArray) - 1; i >= 1; i -= 2 {
 		p[paramArray[i-1]] = paramArray[i]
 	}
 	return p
 }
 
-func convertHandlerFuncs(h []HandlerFunc) []Handler {
-	handlers := make([]Handler, len(h))
-	for i, f := range h {
-		handlers[i] = HandlerFunc(f)
+func batchRoute(f []HandlerFunc) *Route {
+	batch := &Route{}
+	for _, h := range f {
+		batch.Use(h)
 	}
-	return handlers
-}
-
-// ErrorHandler is the default ErrorHandler
-func HandlerError(w http.ResponseWriter, r *http.Request, err error) {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-}
-
-// PatternTreeServeMux is an HTTP request multiplexer that does pattern matching.
-type PatternTreeServeMux struct {
-	rootEntry    *Entry
-	middleware   Middleware
-	notfound     http.Handler
-	errorHandler ErrorHandler
-}
-
-// New creates a new muxer
-func New() *PatternTreeServeMux {
-	entry := newStaticEntry("")
-	entry.exec = entry.traverse
-	return &PatternTreeServeMux{
-		rootEntry:    entry,
-		notfound:     http.NotFoundHandler(),
-		errorHandler: ErrorHandlerFunc(HandlerError),
-	}
-}
-
-// NewWithPrefix create a new muxer with the given prefix pattern string.
-func NewWithPrefix(pat string) *PatternTreeServeMux {
-	entry := newStaticEntry(pat)
-	return &PatternTreeServeMux{
-		rootEntry: entry,
-		notfound:  http.NotFoundHandler(),
-	}
-}
-
-// ServeHTTP execute matched handler or execute notfound handler.
-func (m *PatternTreeServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h, paramArray := m.rootEntry.exec(r.Method, r.URL.Path)
-	if h == nil {
-		m.notfound.ServeHTTP(w, r)
-		return
-	}
-
-	p := createParams(contexts[r], paramArray)
-	contexts[r] = p
-	defer delete(contexts, r)
-	if err := m.middleware.ServeHTTP(w, r); err != nil {
-		m.errorHandler.ServeHTTP(w, r, err)
-		return
-	}
-	if err := h.ServeHTTP(w, r); err != nil {
-		m.errorHandler.ServeHTTP(w, r, err)
-	}
-}
-
-// Use appends Handler as Middleware
-func (m *PatternTreeServeMux) Use(h ...Handler) {
-	m.middleware = append(m.middleware, h...)
-}
-
-// UseFunc appends HandlerFunc as Middleware
-func (m *PatternTreeServeMux) UseFunc(h ...HandlerFunc) {
-	handlers := convertHandlerFuncs(h)
-	m.Use(handlers...)
-}
-
-// registerPattern merge pattern with the given handlers.
-func (m *PatternTreeServeMux) registerPattern(pat string, h []Handler) (Handler, *Entry) {
-	patterns, err := SplitPath(pat)
-	if err != nil {
-		panic(err)
-	}
-	var handler Handler
-	if len(h) > 1 {
-		handler = Middleware(h)
-	} else {
-		handler = h[0]
-	}
-	leafEntry := m.rootEntry.MergePatterns(patterns)
-	return handler, leafEntry
-}
-
-// HandleFunc add Handlers with the given pattern.
-func (m *PatternTreeServeMux) HandleFunc(pat string, h ...HandlerFunc) {
-	handlers := convertHandlerFuncs(h)
-	m.Handle(pat, handlers...)
-}
-
-// Handle a http.Handler with the given url pattern. panic with duplicate
-// handler registration for a pattern.
-func (m *PatternTreeServeMux) Handle(pat string, h ...Handler) {
-	handler, leafEntry := m.registerPattern(pat, h)
-	if err := leafEntry.SetHandler(handler); err != nil {
-		panic(err)
-	}
-}
-
-// Handle the handler with the given http method and pattern. Panic with
-// duplicate handler registration.
-func (m *PatternTreeServeMux) HandleMethod(method, pat string, h ...Handler) {
-	handler, leafEntry := m.registerPattern(pat, h)
-	if err := leafEntry.SetMethodHandler(method, handler); err != nil {
-		panic(err)
-	}
-}
-
-// Get registers the patree.HandlerFunc functions with the given pattern for
-// "GET" and "HEAD" method.
-func (m *PatternTreeServeMux) Get(pat string, h ...HandlerFunc) {
-	handlers := convertHandlerFuncs(h)
-	m.GetHandler(pat, handlers...)
-}
-
-// Post registers the patree.HandlerFunc functions with the given pattern
-// for "POST" method.
-func (m *PatternTreeServeMux) Post(pat string, h ...HandlerFunc) {
-	handlers := convertHandlerFuncs(h)
-	m.PostHandler(pat, handlers...)
-}
-
-// Put registers the patree.HandlerFunc functions with the given pattern for
-// "PUT" method.
-func (m *PatternTreeServeMux) Put(pat string, h ...HandlerFunc) {
-	handlers := convertHandlerFuncs(h)
-	m.PutHandler(pat, handlers...)
-}
-
-// Patch registers the patree.HandlerFunc functions with the given pattern
-// for "PATCH" method.
-func (m *PatternTreeServeMux) Patch(pat string, h ...HandlerFunc) {
-	handlers := convertHandlerFuncs(h)
-	m.PatchHandler(pat, handlers...)
-}
-
-// Delete registers the patree.HandlerFunc functions with the given pattern
-// for "DELETE" method.
-func (m *PatternTreeServeMux) Delete(pat string, h ...HandlerFunc) {
-	handlers := convertHandlerFuncs(h)
-	m.DeleteHandler(pat, handlers...)
-}
-
-// Options registers the patree.HandlerFunc functions with the given pattern
-// for "OPTIONS" method.
-func (m *PatternTreeServeMux) Options(pat string, h ...HandlerFunc) {
-	handlers := convertHandlerFuncs(h)
-	m.OptionsHandler(pat, handlers...)
-}
-
-// GetHandler registers the patree.Handler with the given pattern for "GET" and
-// "HEAD" method.
-func (m *PatternTreeServeMux) GetHandler(pat string, h ...Handler) {
-	m.HandleMethod("GET", pat, h...)
-	m.HandleMethod("HEAD", pat, h...)
-}
-
-// PostHandler registers the patree.Handler with the given pattern for "POST"
-// method.
-func (m *PatternTreeServeMux) PostHandler(pat string, h ...Handler) {
-	m.HandleMethod("POST", pat, h...)
-}
-
-// PutHandler registers the patree.Handler with the given pattern for "PUT"
-// method.
-func (m *PatternTreeServeMux) PutHandler(pat string, h ...Handler) {
-	m.HandleMethod("PUT", pat, h...)
-}
-
-// PatchHandler registers the patree.Handler with the given pattern for "PATCH"
-// method.
-func (m *PatternTreeServeMux) PatchHandler(pat string, h ...Handler) {
-	m.HandleMethod("PATCH", pat, h...)
-}
-
-// DeleteHandler registers the patree.Handler with the give pattern for "DELETE"
-// method.
-func (m *PatternTreeServeMux) DeleteHandler(pat string, h ...Handler) {
-	m.HandleMethod("DELETE", pat, h...)
-}
-
-// OptionsHandler registers the patree.Handler with the given pattern for
-// "OPTIONS" method.
-func (m *PatternTreeServeMux) OptionsHandler(pat string, h ...Handler) {
-	m.HandleMethod("OPTIONS", pat, h...)
-}
-
-// NotFound registers fallback HandlerFunc in case no pattern matches.
-func (m *PatternTreeServeMux) NotFound(f http.HandlerFunc) {
-	m.NotFoundHandler(f)
-}
-
-// NotFoundHandler reigsters fallback Handler in case no pattern matches.
-func (m *PatternTreeServeMux) NotFoundHandler(h http.Handler) {
-	m.notfound = h
-}
-
-// Error registers an error handler function.
-func (m *PatternTreeServeMux) Error(h ErrorHandlerFunc) {
-	m.ErrorHandler(h)
-}
-
-// ErrorHandler registers an error handler.
-func (m *PatternTreeServeMux) ErrorHandler(h ErrorHandler) {
-	m.errorHandler = h
+	return batch
 }
